@@ -1,0 +1,188 @@
+import { useState } from 'react';
+import { PixelPanel } from './PixelPanel';
+import { PixelBadge } from './PixelBadge';
+import { PixelButton } from './PixelButton';
+import { SpritePortrait } from './SpritePortrait';
+import { PtyTerminalView } from './PtyTerminalView';
+import { disposeTerminal } from './terminalPool';
+import { SidebarTabs } from './SidebarTabs';
+import { FilesTab } from './FilesTab';
+import { Icon } from './Icon';
+import { useStore, type Agent } from '@/store/store';
+import { usePtyParser } from '@/hooks/usePtyParser';
+
+export interface AgentDetailPanelProps {
+  agent: Agent;
+}
+
+export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
+  const [openTerminalState, setOpenTerminalState] = useState<'idle' | 'opening' | 'ok' | 'error'>('idle');
+  const [openTerminalError, setOpenTerminalError] = useState<string | undefined>();
+  const removeAgent = useStore(s => s.removeAgent);
+  const updateAgent = useStore(s => s.updateAgent);
+  const setFullscreen = useStore(s => s.setFullscreen);
+  const fullscreenAgentId = useStore(s => s.fullscreenAgentId);
+  const sidebarTab = useStore(s => s.sidebarTab);
+  const setSidebarTab = useStore(s => s.setSidebarTab);
+  const isReal = !!agent.ptyId;
+  // While this agent is shown in the fullscreen overlay, the fullscreen view
+  // owns the pty (it sizes it to fill the screen). Keeping the embedded terminal
+  // mounted too means two xterms fight over the pty's cols/rows — which corrupts
+  // the display and breaks scrolling. So we unmount the embedded one here; it
+  // re-mounts and re-fits when fullscreen closes.
+  const isFullscreenedHere = fullscreenAgentId === agent.id;
+
+  const onPtyStream = usePtyParser(agent.id);
+
+  const openTerminal = async () => {
+    setOpenTerminalState('opening');
+    setOpenTerminalError(undefined);
+    try {
+      const result = await window.cth.openTerminalAt(agent.cwd);
+      if (result.ok) {
+        setOpenTerminalState('ok');
+        setTimeout(() => setOpenTerminalState('idle'), 1500);
+      } else {
+        setOpenTerminalState('error');
+        setOpenTerminalError(result.error ?? 'unknown error');
+        setTimeout(() => setOpenTerminalState('idle'), 4000);
+      }
+    } catch (e) {
+      setOpenTerminalState('error');
+      setOpenTerminalError(e instanceof Error ? e.message : String(e));
+      setTimeout(() => setOpenTerminalState('idle'), 4000);
+    }
+  };
+
+  const onKill = async () => {
+    if (!agent.ptyId) return;
+    if (!confirm(`Kill ${agent.name}? The PTY process will terminate.`)) return;
+    await window.cth.killPty(agent.ptyId);
+    disposeTerminal(agent.ptyId);
+    removeAgent(agent.id);
+  };
+
+  return (
+    <PixelPanel
+      variant="default"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        padding: 0,
+        overflow: 'hidden'
+      }}
+      noPadding
+    >
+      {/* Thin header strip */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 8px',
+        background: 'var(--cth-cream-100)',
+        borderBottom: '1px solid var(--cth-ink-700)',
+        flexShrink: 0
+      }}>
+        <div style={{
+          width: 32, height: 32,
+          background: `var(--cth-${agent.accent}-light)`,
+          boxShadow: 'inset 0 0 0 1px var(--cth-ink-900)',
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'center', overflow: 'hidden',
+          flexShrink: 0
+        }}>
+          <SpritePortrait character={agent.character} scale={1} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: 'var(--cth-font-display)',
+            fontSize: 10, lineHeight: '14px',
+            color: 'var(--cth-ink-900)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+          }}>{agent.name.toUpperCase()}</div>
+          <div style={{
+            display: 'flex', gap: 6, alignItems: 'center', marginTop: 1
+          }}>
+            <PixelBadge status={agent.status} />
+            <span style={{
+              fontSize: 12, color: 'var(--cth-ink-500)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+            }}>{agent.project}</span>
+          </div>
+        </div>
+        <PixelButton variant="secondary" size="sm" onClick={openTerminal} disabled={openTerminalState === 'opening'}>
+          <span title={`open Terminal.app at ${agent.cwd}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="terminal" />
+            {openTerminalState === 'opening' ? '...' : openTerminalState === 'ok' ? 'ok' : openTerminalState === 'error' ? 'err' : 'open'}
+          </span>
+        </PixelButton>
+        {isReal && (
+          <PixelButton variant="destructive" size="sm" onClick={onKill}>
+            <Icon name="x" />
+          </PixelButton>
+        )}
+      </div>
+
+      {openTerminalError && (
+        <div style={{
+          fontSize: 12, color: 'var(--cth-coral)',
+          padding: '2px 8px',
+          background: 'var(--cth-coral-light)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+        }}>{openTerminalError}</div>
+      )}
+
+      {/* Tabs */}
+      <SidebarTabs current={sidebarTab} accent={agent.accent} onChange={setSidebarTab} />
+
+      {/* Active tab body — fills remaining space */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        {sidebarTab === 'terminal' && (
+          isReal && agent.ptyId ? (
+            isFullscreenedHere ? (
+              <EmptyTab title="In fullscreen">
+                This terminal is open in fullscreen. Press Esc or exit fullscreen to bring it back here.
+              </EmptyTab>
+            ) : (
+            <PtyTerminalView
+              key={agent.ptyId}
+              ptyId={agent.ptyId}
+              onStreamData={onPtyStream}
+              onUserPrompt={(t) => updateAgent(agent.id, { lastPrompt: t })}
+              onToggleFullscreen={() => setFullscreen(agent.id)}
+              fullscreen={false}
+              embedded
+            />
+            )
+          ) : (
+            <EmptyTab title="No PTY">
+              This agent has no live terminal. Spawn an agent through "add agent" to use the terminal tab.
+            </EmptyTab>
+          )
+        )}
+
+        {sidebarTab === 'files' && (
+          <FilesTab cwd={agent.cwd} />
+        )}
+      </div>
+    </PixelPanel>
+  );
+}
+
+function EmptyTab({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      flex: 1, display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      padding: 16, gap: 8,
+      background: 'var(--cth-paper-200)'
+    }}>
+      <div style={{
+        fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '14px',
+        color: 'var(--cth-ink-500)'
+      }}>{title.toUpperCase()}</div>
+      <p style={{
+        margin: 0, fontSize: 14, textAlign: 'center', color: 'var(--cth-ink-700)',
+        maxWidth: 280
+      }}>{children}</p>
+    </div>
+  );
+}
