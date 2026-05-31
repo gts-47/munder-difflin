@@ -1,4 +1,4 @@
-# Munder Difflin v0.1.0
+# Munder Difflin v0.1.1
 
 **A local hive of Claude Code agents that run themselves** — messaging, routing, and
 remembering, coordinated by a GOD orchestrator you talk to. Local-first and open source.
@@ -15,24 +15,24 @@ older Intel Macs use **x64**; the **universal** build runs on both.
 ### 🍎 macOS
 | Build | File |
 |---|---|
-| Apple Silicon (arm64) — *recommended* | [`Munder-Difflin-0.1.0-mac-arm64.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-mac-arm64.dmg) |
-| Intel (x64) | [`Munder-Difflin-0.1.0-mac-x64.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-mac-x64.dmg) |
-| Universal (both, larger) | [`Munder-Difflin-0.1.0-mac-universal.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-mac-universal.dmg) |
+| Apple Silicon (arm64) — *recommended* | [`Munder-Difflin-0.1.1-mac-arm64.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.1-mac-arm64.dmg) |
+| Intel (x64) | [`Munder-Difflin-0.1.1-mac-x64.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.1-mac-x64.dmg) |
+| Universal (both, larger) | [`Munder-Difflin-0.1.1-mac-universal.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.1-mac-universal.dmg) |
 
 ### 🪟 Windows
 | Build | File |
 |---|---|
-| Installer (x64) — *recommended* | [`Munder-Difflin-0.1.0-win-x64-setup.exe`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-win-x64-setup.exe) |
-| Portable (x64, no install) | [`Munder-Difflin-0.1.0-win-x64-portable.exe`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-win-x64-portable.exe) |
+| Installer (x64) — *recommended* | [`Munder-Difflin-0.1.1-win-x64-setup.exe`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.1-win-x64-setup.exe) |
+| Portable (x64, no install) | [`Munder-Difflin-0.1.1-win-x64-portable.exe`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.1-win-x64-portable.exe) |
 
 ### 🐧 Linux
 | Build | File |
 |---|---|
-| AppImage (x86_64) | [`Munder-Difflin-0.1.0-linux-x86_64.AppImage`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-linux-x86_64.AppImage) |
+| AppImage (x86_64) | [`Munder-Difflin-0.1.1-linux-x86_64.AppImage`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.1-linux-x86_64.AppImage) |
 
 ### 📦 Source
-[Source code (zip)](https://github.com/chaitanyagiri/munder-difflin/archive/refs/tags/v0.1.0.zip) ·
-[Source code (tar.gz)](https://github.com/chaitanyagiri/munder-difflin/archive/refs/tags/v0.1.0.tar.gz)
+[Source code (zip)](https://github.com/chaitanyagiri/munder-difflin/archive/refs/tags/v0.1.1.zip) ·
+[Source code (tar.gz)](https://github.com/chaitanyagiri/munder-difflin/archive/refs/tags/v0.1.1.tar.gz)
 
 > **Verify your download:** [`SHA256SUMS.txt`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/SHA256SUMS.txt) — then `shasum -a 256 -c SHA256SUMS.txt` (macOS/Linux) or `Get-FileHash` (Windows).
 
