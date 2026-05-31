@@ -125,6 +125,35 @@
   .btn.sm { padding: 9px 13px; font-size: 13px; box-shadow: var(--shadow-chip); }
   .btn.sm:hover { box-shadow: 5px 5px 0 var(--ink); }
 
+  /* ---------- download picker (tooltip menu) ---------- */
+  .dl { position: relative; display: inline-flex; }
+  .dl > .btn { cursor: pointer; }
+  .dl-caret { font-size: 10px; margin-left: 2px; transition: transform .14s ease; }
+  .dl.open .dl-caret { transform: rotate(180deg); }
+  .dl-menu {
+    position: absolute; top: calc(100% + 10px); left: 0; z-index: 90;
+    min-width: 256px; max-width: calc(100vw - 32px);
+    background: var(--paper); border: var(--border-bold); box-shadow: var(--shadow-card-sm);
+    padding: 6px; text-align: left;
+    opacity: 0; visibility: hidden; transform: translateY(-6px);
+    transition: opacity .14s ease, transform .14s ease, visibility .14s;
+  }
+  .dl-menu.right { left: auto; right: 0; }
+  .dl.open .dl-menu { opacity: 1; visibility: visible; transform: none; }
+  .dl-menu a {
+    display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+    color: var(--ink); border: 2px solid transparent;
+  }
+  .dl-menu a:hover { background: var(--cream); border-color: var(--ink); color: var(--ink); transform: none; }
+  .dl-ic { font-size: 20px; width: 24px; text-align: center; flex: none; }
+  .dl-txt { display: flex; flex-direction: column; line-height: 1.3; }
+  .dl-txt b { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--ink); }
+  .dl-txt b em { font-style: normal; color: var(--maroon); font-weight: 500; font-size: 10.5px; }
+  .dl-txt span { font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+  /* keep left-anchored menus from running off the right edge on narrow screens;
+     right-anchored (nav) menus already open leftward, so leave them alone */
+  @media (max-width: 560px) { .dl-menu:not(.right) { min-width: 0; width: max-content; max-width: calc(100vw - 32px); } }
+
   /* ---------- section primitives ---------- */
   section { padding: 84px 0; position: relative; }
   .band { background: var(--cream); border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
@@ -428,7 +457,7 @@
   </div>
   <div class="nav-actions">
     <a class="btn ghost sm nav-ghost" href="https://github.com/chaitanyagiri/munder-difflin">★ Star</a>
-    <a class="btn primary sm" href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download</a>
+    <a class="btn primary sm" data-download data-align="right" href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download</a>
   </div>
 </nav>
 
@@ -444,7 +473,7 @@
       <b>messaging, routing, and remembering</b>, run by a <b>GOD orchestrator</b> you talk to.
     </p>
     <div class="hero-cta reveal">
-      <a class="btn primary" href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download free</a>
+      <a class="btn primary" data-download href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download free</a>
       <a class="btn ghost" href="https://github.com/chaitanyagiri/munder-difflin">★ Star on GitHub</a>
     </div>
     <p class="trust reveal"><b>Free &amp; open source.</b> macOS · Windows · Linux — or <a href="#install">build from source</a> in two commands.</p>
@@ -454,7 +483,6 @@
       <div class="win-bar">
         <div class="dots"><i></i><i></i><i></i></div>
         <span class="title">munder-difflin — the floor</span>
-        <span class="status"><span class="live-dot"></span> live · 3 agents</span>
       </div>
       <div class="media-frame hero-media">
         <video class="vid" muted loop playsinline preload="metadata" poster="./media/hero-poster.svg" aria-label="Munder Difflin running a floor of Claude Code agents">
@@ -524,7 +552,6 @@
             <div class="win-bar">
               <div class="dots"><i></i><i></i><i></i></div>
               <span class="title">the floor · agents at work</span>
-              <span class="status"><span class="live-dot"></span> live</span>
             </div>
             <div class="ill floor-ill" role="img" aria-label="An office floor of terminal agents passing messages desk to desk">
               <svg viewBox="0 0 400 275" preserveAspectRatio="none" aria-hidden="true">
@@ -704,7 +731,7 @@
       <div>npm run dev <span class="m"># launches the app with hot reload</span></div>
     </div>
     <div class="center-cta reveal" style="justify-content:flex-start; margin-top:24px;">
-      <a class="btn primary" href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download · all platforms</a>
+      <a class="btn primary" data-download href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download</a>
       <a class="btn ghost" href="https://github.com/chaitanyagiri/munder-difflin">Read the docs →</a>
     </div>
   </div>
@@ -760,7 +787,7 @@
     <p class="reveal">Free, open source, and fully local. Download a build for macOS, Windows, or Linux — or clone
       and run in two commands. It drives the Claude&nbsp;Code you already have.</p>
     <div class="center-cta reveal">
-      <a class="btn primary" href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download free</a>
+      <a class="btn primary" data-download href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download free</a>
       <a class="btn sky" href="https://github.com/chaitanyagiri/munder-difflin">★ Star on GitHub</a>
     </div>
     <p class="meta reveal">macOS · Windows · Linux · MIT-licensed · Bring your own Claude Code</p>
@@ -804,6 +831,95 @@
     var nav = document.getElementById('nav');
     var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
     onScroll(); window.addEventListener('scroll', onScroll, { passive: true });
+  })();
+
+  // download picker — pick macOS / Windows / Linux, click starts the download
+  (function () {
+    var REPO = 'chaitanyagiri/munder-difflin';
+    var REL = '0.1.2'; // fallback version; live links are resolved from the GitHub API below
+    var BASE = 'https://github.com/' + REPO + '/releases/latest/download/';
+    var PLATFORMS = [
+      { key: 'mac',   icon: '🍎', os: 'macOS',   sub: 'Universal · Apple Silicon + Intel', match: 'mac-universal.dmg',     file: 'Munder-Difflin-' + REL + '-mac-universal.dmg' },
+      { key: 'win',   icon: '🪟', os: 'Windows', sub: '64-bit installer (.exe)',           match: 'win-x64-setup.exe',     file: 'Munder-Difflin-' + REL + '-win-x64-setup.exe' },
+      { key: 'linux', icon: '🐧', os: 'Linux',   sub: 'AppImage · x86_64',                 match: 'linux-x86_64.AppImage', file: 'Munder-Difflin-' + REL + '-linux-x86_64.AppImage' }
+    ];
+    var ua = navigator.userAgent;
+    var cur = /Windows/.test(ua) ? 'win'
+            : (/Mac|iPhone|iPad/.test(ua) ? 'mac'
+            : (/Linux|Android|X11/.test(ua) ? 'linux' : null));
+
+    var triggers = document.querySelectorAll('[data-download]');
+    if (!triggers.length) return;
+
+    triggers.forEach(function (t) {
+      var wrap = document.createElement('span');
+      wrap.className = 'dl';
+      t.parentNode.insertBefore(wrap, t);
+      wrap.appendChild(t);
+      t.insertAdjacentHTML('beforeend', '<span class="dl-caret" aria-hidden="true">▾</span>');
+      t.setAttribute('aria-haspopup', 'true');
+      t.setAttribute('aria-expanded', 'false');
+
+      var menu = document.createElement('div');
+      menu.className = 'dl-menu' + (t.getAttribute('data-align') === 'right' ? ' right' : '');
+      menu.setAttribute('role', 'menu');
+      PLATFORMS.forEach(function (p) {
+        var a = document.createElement('a');
+        a.href = BASE + p.file;
+        a.setAttribute('download', '');
+        a.setAttribute('role', 'menuitem');
+        a.dataset.key = p.key;
+        a.innerHTML = '<span class="dl-ic">' + p.icon + '</span>' +
+          '<span class="dl-txt"><b>' + p.os + (p.key === cur ? ' <em>· your OS</em>' : '') +
+          '</b><span>' + p.sub + '</span></span>';
+        menu.appendChild(a);
+      });
+      wrap.appendChild(menu);
+
+      t.addEventListener('click', function (e) {
+        e.preventDefault();
+        var isOpen = wrap.classList.contains('open');
+        document.querySelectorAll('.dl.open').forEach(function (d) {
+          d.classList.remove('open');
+          var trg = d.querySelector('[data-download]'); if (trg) trg.setAttribute('aria-expanded', 'false');
+        });
+        if (!isOpen) { wrap.classList.add('open'); t.setAttribute('aria-expanded', 'true'); }
+      });
+      // clicking a real download closes the menu
+      menu.addEventListener('click', function (e) {
+        if (e.target.closest('a')) { wrap.classList.remove('open'); t.setAttribute('aria-expanded', 'false'); }
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.dl')) {
+        document.querySelectorAll('.dl.open').forEach(function (d) {
+          d.classList.remove('open');
+          var trg = d.querySelector('[data-download]'); if (trg) trg.setAttribute('aria-expanded', 'false');
+        });
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') document.querySelectorAll('.dl.open').forEach(function (d) { d.classList.remove('open'); });
+    });
+
+    // upgrade every menu link to the real latest-release asset URLs so they
+    // never 404 after a version bump (graceful fallback to the hardcoded links).
+    try {
+      fetch('https://api.github.com/repos/' + REPO + '/releases/latest')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (rel) {
+          if (!rel || !rel.assets) return;
+          PLATFORMS.forEach(function (p) {
+            var asset = rel.assets.find(function (a) { return a.name.indexOf(p.match) !== -1; });
+            if (!asset) return;
+            document.querySelectorAll('.dl-menu a[data-key="' + p.key + '"]').forEach(function (el) {
+              el.href = asset.browser_download_url;
+            });
+          });
+        })
+        .catch(function () {});
+    } catch (e) { /* offline / blocked — hardcoded links stay */ }
   })();
 
   // play product footage only while it's on screen — keeps it subtle & light
