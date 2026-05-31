@@ -34,6 +34,16 @@ jobs:
           node-version: 20
           cache: npm
 
+      # node-gyp (used to rebuild native node-pty) imports distutils, which was
+      # removed in Python 3.12. Pin 3.11 and install setuptools so the distutils
+      # shim is available across all runners.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Provide distutils for node-gyp
+        run: python -m pip install --upgrade setuptools
+
       - name: Install dependencies
         run: npm ci
 
