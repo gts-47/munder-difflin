@@ -4,6 +4,12 @@
   "private": true,
   "description": "Local multi-agent harness for Claude Code: autonomous agents that message, route, and remember — coordinated by a GOD orchestrator and visualized as avatars at work.",
   "main": "out/main/index.js",
+  "author": "Chaitanya Giri",
+  "homepage": "https://munderdiffl.in/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chaitanyagiri/munder-difflin.git"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -11,7 +17,11 @@
     "postinstall": "electron-rebuild -f -w node-pty",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web"
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
@@ -42,6 +52,7 @@
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",
     "electron": "^32.2.0",
+    "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.8"

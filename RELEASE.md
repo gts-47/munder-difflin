@@ -1,0 +1,91 @@
+# Munder Difflin v0.1.0
+
+**A local hive of Claude Code agents that run themselves** — messaging, routing, and
+remembering, coordinated by a GOD orchestrator you talk to. Local-first and open source.
+
+### → [**munderdiffl.in**](https://munderdiffl.in/) — see it in action, then grab a build below
+
+---
+
+## ⤓ Downloads
+
+Latest builds for every platform. Not sure which Mac? Apple Silicon (M1–M4) is **arm64**;
+older Intel Macs use **x64**; the **universal** build runs on both.
+
+### 🍎 macOS
+| Build | File |
+|---|---|
+| Apple Silicon (arm64) — *recommended* | [`Munder-Difflin-0.1.0-mac-arm64.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-mac-arm64.dmg) |
+| Intel (x64) | [`Munder-Difflin-0.1.0-mac-x64.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-mac-x64.dmg) |
+| Universal (both, larger) | [`Munder-Difflin-0.1.0-mac-universal.dmg`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-mac-universal.dmg) |
+
+### 🪟 Windows
+| Build | File |
+|---|---|
+| Installer (x64) — *recommended* | [`Munder-Difflin-0.1.0-win-x64-setup.exe`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-win-x64-setup.exe) |
+| Portable (x64, no install) | [`Munder-Difflin-0.1.0-win-x64-portable.exe`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-win-x64-portable.exe) |
+
+### 🐧 Linux
+| Build | File |
+|---|---|
+| AppImage (x86_64) | [`Munder-Difflin-0.1.0-linux-x86_64.AppImage`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/Munder-Difflin-0.1.0-linux-x86_64.AppImage) |
+
+### 📦 Source
+[Source code (zip)](https://github.com/chaitanyagiri/munder-difflin/archive/refs/tags/v0.1.0.zip) ·
+[Source code (tar.gz)](https://github.com/chaitanyagiri/munder-difflin/archive/refs/tags/v0.1.0.tar.gz)
+
+> **Verify your download:** [`SHA256SUMS.txt`](https://github.com/chaitanyagiri/munder-difflin/releases/latest/download/SHA256SUMS.txt) — then `shasum -a 256 -c SHA256SUMS.txt` (macOS/Linux) or `Get-FileHash` (Windows).
+
+> The links above always point at the **latest** release (`/releases/latest/download/…`),
+> so this page stays correct across versions.
+
+---
+
+## First launch
+
+These builds are **not code-signed yet**, so your OS may warn on first open.
+
+- **macOS** — right-click the app → **Open** → **Open**, or run
+  `xattr -dr com.apple.quarantine "/Applications/Munder Difflin.app"`.
+- **Windows** — SmartScreen may show "Windows protected your PC" → **More info** → **Run anyway**.
+- **Linux** — make the AppImage executable: `chmod +x Munder-Difflin-*.AppImage`, then run it.
+
+---
+
+## Requirements
+- macOS 12+, Windows 10/11, or a modern Linux desktop
+- [Claude Code](https://claude.com/claude-code) installed and on your `PATH`
+- A Claude Code subscription (Munder Difflin drives your existing `claude` CLI — it doesn't replace it)
+
+---
+
+## 🛠 Build from source
+```bash
+git clone https://github.com/chaitanyagiri/munder-difflin.git
+cd munder-difflin
+npm install        # rebuilds node-pty for Electron
+npm run dev        # launches the app with hot reload
+```
+Node 18+ and a C/C++ toolchain are required (Xcode CLT on macOS, Build Tools on Windows).
+To produce installers yourself: `npm run dist` (current OS), or `dist:mac` / `dist:win` / `dist:linux`.
+
+---
+
+## What's inside
+- **The simulation** — every agent is a real `claude` pseudo-terminal, visualized as an avatar on a watchable office floor (`node-pty` · `xterm.js` · Pixi.js).
+- **MemPalace** — a markdown-first, semantic memory layer the whole office shares; cross-session recall in ~12ms.
+- **GOD orchestrator + hive** — one agent you talk to routes work to specialists and stays autonomous, escalating only critical items (spend, destructive ops, scope) to an approvals queue.
+- **Plugs into your setup** — your subscription, settings, skills, and MCP servers; `/remote-control` reaches the whole floor from your phone.
+
+Full notes in the [CHANGELOG](https://github.com/chaitanyagiri/munder-difflin/blob/main/CHANGELOG.md).
+
+---
+
+## Links
+[Website](https://munderdiffl.in/) ·
+[Repo](https://github.com/chaitanyagiri/munder-difflin) ·
+[Issues](https://github.com/chaitanyagiri/munder-difflin/issues) ·
+[Contribute](https://github.com/chaitanyagiri/munder-difflin/blob/main/CONTRIBUTING.md) ·
+[Become a patron](https://razorpay.me/@munderdifflinfund)
+
+MIT-licensed. An affectionate parody — not affiliated with NBC's *The Office* or Dunder Mifflin.

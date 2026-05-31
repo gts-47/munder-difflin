@@ -1,0 +1,60 @@
+appId: in.munderdiffl.app
+productName: Munder Difflin
+copyright: Copyright © 2026 Chaitanya Giri
+
+# electron-vite emits the app into out/; package exactly that plus what the
+# runtime needs. node-pty is native, so keep it out of the asar.
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**
+  - package.json
+  - "!**/*.{md,map,ts,tsx}"
+  - "!**/{.eslintrc,.prettierrc,tsconfig*.json,electron.vite.config.*}"
+
+asarUnpack:
+  - "**/node_modules/node-pty/**"
+
+# Rebuild native deps (node-pty) for the target during packaging.
+npmRebuild: true
+
+# ---- macOS ----
+mac:
+  category: public.app-category.developer-tools
+  # Unsigned for now (no Developer ID). Gatekeeper note is in RELEASE.md.
+  identity: null
+  target:
+    - target: dmg
+      arch: [arm64, x64, universal]
+  artifactName: Munder-Difflin-${version}-mac-${arch}.dmg
+
+dmg:
+  title: Munder Difflin ${version}
+
+# ---- Windows ----
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: Munder-Difflin-${version}-win-x64-setup.exe
+  shortcutName: Munder Difflin
+
+portable:
+  artifactName: Munder-Difflin-${version}-win-x64-portable.exe
+
+# ---- Linux ----
+linux:
+  category: Development
+  target:
+    - target: AppImage
+      arch: [x64]
+  artifactName: Munder-Difflin-${version}-linux-x86_64.AppImage
