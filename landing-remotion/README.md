@@ -51,7 +51,7 @@ docs/media/hero.mp4
 ```
 
 If you don't have a capture yet, render `HeroFallback` (above) as a stand-in. Until either
-exists, the page shows `docs/media/hero-poster.svg`.
+exists, the page shows `docs/media/og.png`.
 
 ## Notes
 

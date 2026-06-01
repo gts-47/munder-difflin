@@ -240,8 +240,8 @@ The retired `media/how-*.{webm,mp4}` footage stays on disk but is no longer refe
 
 ## 10. SEO / meta
 
-Title, description, canonical (`https://munderdiffl.in/`), favicon (`./logo-mark.svg`),
-Open Graph + Twitter card (`og:image` → `./media/hero-poster.svg`), `theme-color` `#F5F2E8`.
+Title, description, canonical (`https://munderdiffl.in/`), favicon (`./logo.png`),
+Open Graph + Twitter card (`og:image` → `./media/og.png`), `theme-color` `#F5F2E8`.
 CNAME → `munderdiffl.in`.
 
 ---
@@ -250,11 +250,12 @@ CNAME → `munderdiffl.in`.
 
 | Asset | Path | Status |
 |---|---|---|
-| Favicon / brand mark | `./logo-mark.svg` | Used (favicon). Nav/footer mark is a CSS maroon `MD` tile. |
-| Full logo / banner | `./logo.svg`, `./banner.svg` | Available (social). |
+| Logo | `./logo.png` | Favicon, nav, footer, README, app chrome. |
+| Social banner | `./banner.png` | Wide maroon lockup + tagline (GitHub/social headers). |
+| Open Graph / previews | `./media/og.png` | `og:image`, Twitter card, hero `<video poster>`, README demo poster. |
 | Hero footage | `./media/hero.{webm,mp4}` | **Used** — hero only. `webm` first, `mp4` fallback; on-screen-only. |
 | "How" footage | `./media/how-*.{webm,mp4}` | **Retired** — replaced by hand-built `.ill` illustrations; kept on disk, unreferenced. |
-| Footage posters | `./media/*-poster.svg` | Hero poster used (`<video poster>` + `og:image`); `how-*` posters now unreferenced. |
+| Footage posters | `./media/*-poster.svg` | Legacy placeholders; hero/README use `og.png` instead. |
 
 ---
 

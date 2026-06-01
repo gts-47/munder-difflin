@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="./docs/logo.svg" alt="Munder Difflin Inc — Multi-Agent Harness" width="340">
+<img src="./docs/logo.png" alt="Munder Difflin Inc — Multi-Agent Harness" width="340">
 
 # Munder Difflin
 
@@ -21,8 +21,12 @@ you talk to, and visualized as avatars at work on a shared office floor.
 
 <br>
 
+<img src="./docs/banner.png" alt="Munder Difflin — A hive of agents that message, route, and remember" width="820">
+
+<br>
+
 <!-- Inline player renders on github.com (raw URL required; relative paths only link). -->
-<video src="https://github.com/chaitanyagiri/munder-difflin/raw/main/docs/media/hero.mp4" poster="https://github.com/chaitanyagiri/munder-difflin/raw/main/docs/media/hero-poster.svg" controls muted loop playsinline width="820">
+<video src="https://github.com/chaitanyagiri/munder-difflin/raw/main/docs/media/hero.mp4" poster="https://github.com/chaitanyagiri/munder-difflin/raw/main/docs/media/og.png" controls muted loop playsinline width="820">
   <a href="https://github.com/chaitanyagiri/munder-difflin/raw/main/docs/media/hero.mp4">▶ Watch the floor — Munder Difflin running a hive of Claude Code agents</a>
 </video>
 
@@ -199,8 +203,8 @@ src/
     scene/office/            Pixi office floor: OfficeFloor, Character, Camera, cast, pathfinding, …
     store/ · hooks/          zustand store, event loop, PTY parser, typewriter
     assets/                  tilesets, maps, character sheets (see ATTRIBUTION.md)
-docs/                        logo, banner, and the landing page (GitHub Pages → munderdiffl.in)
-docs/media/                  landing-page posters + rendered Remotion clips
+docs/                        `logo.png`, `banner.png`, landing page (GitHub Pages → munderdiffl.in)
+docs/media/                  `og.png` (social previews) + rendered Remotion clips
 landing-remotion/            Remotion project that renders the landing page's "how it works" clips
 HIVE.md · SPEC.md · DESIGN.md   multi-agent · terminal/event · visual design
 ```

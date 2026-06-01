@@ -6,13 +6,14 @@
 <title>Munder Difflin — Local multi-agent harness for Claude Code</title>
 <meta name="description" content="Munder Difflin turns the Claude Code terminals you already run into a self-coordinating hive of autonomous agents — messaging, routing, and remembering, run by a GOD orchestrator you talk to. Local, open source, for macOS, Windows &amp; Linux." />
 <link rel="canonical" href="https://munderdiffl.in/" />
-<link rel="icon" type="image/svg+xml" href="./logo-mark.svg" />
+<link rel="icon" type="image/png" href="./logo.png" />
+<link rel="apple-touch-icon" href="./logo.png" />
 <meta property="og:title" content="Munder Difflin — multi-agent harness for Claude Code" />
 <meta property="og:description" content="A local hive of Claude Code agents that message, route, and remember — coordinated by a GOD orchestrator you talk to. macOS, Windows &amp; Linux." />
 <meta property="og:image" content="https://munderdiffl.in/media/og.png" />
 <meta property="og:image:type" content="image/png" />
-<meta property="og:image:width" content="1280" />
-<meta property="og:image:height" content="720" />
+<meta property="og:image:width" content="2880" />
+<meta property="og:image:height" content="1640" />
 <meta property="og:image:alt" content="Munder Difflin office floor — agents at their desks, the GOD orchestrator in Michael's office, and a live terminal session." />
 <meta property="og:url" content="https://munderdiffl.in/" />
 <meta property="og:type" content="website" />
@@ -97,14 +98,8 @@
   }
   nav.scrolled { border-bottom-color: var(--ink); }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .brand .mk {
-    width: 30px; height: 30px; border: 2px solid var(--ink);
-    background: var(--maroon);
-    display: grid; place-items: center;
-    font-family: var(--font-mono); font-weight: 700; font-size: 12px; letter-spacing: -0.02em;
-    color: #fff;
-  }
-  .brand b { font-family: var(--font-mono); font-weight: 700; font-size: 13px; letter-spacing: 0.02em; color: var(--ink); }
+  .brand-logo { height: 36px; width: auto; display: block; }
+  .foot-brand .brand-logo { height: 28px; }
   nav .spacer { flex: 1; }
   nav .links { display: flex; gap: 26px; font-size: 14px; font-family: var(--font-mono); }
   nav .links a { color: var(--ink-dim); font-weight: 500; }
@@ -439,7 +434,7 @@
     section { padding: 60px 0; }
     .hero { padding: 52px 0 48px; }
     nav { gap: 10px; }
-    .brand b { font-size: 11px; letter-spacing: 0.01em; }
+    .brand-logo { height: 28px; }
     .nav-actions { gap: 8px; }
   }
 </style>
@@ -449,8 +444,7 @@
 <!-- ===================== NAV ===================== -->
 <nav id="nav">
   <div class="brand">
-    <div class="mk">MD</div>
-    <b>MUNDER&nbsp;DIFFLIN</b>
+    <img class="brand-logo" src="./logo.png" width="1318" height="840" alt="Munder Difflin, Inc. — Multi-Agent Harness" />
   </div>
   <div class="spacer"></div>
   <div class="links">
@@ -491,7 +485,7 @@
         <span class="title">munder-difflin — the floor</span>
       </div>
       <div class="media-frame hero-media">
-        <video class="vid" muted loop playsinline preload="metadata" poster="./media/hero-poster.svg" aria-label="Munder Difflin running a floor of Claude Code agents">
+        <video class="vid" muted loop playsinline preload="metadata" poster="./media/og.png" aria-label="Munder Difflin running a floor of Claude Code agents">
           <source src="./media/hero.webm" type="video/webm" />
           <source src="./media/hero.mp4" type="video/mp4" />
         </video>
@@ -805,8 +799,7 @@
   <div class="wrap">
     <div class="foot-top">
       <div class="foot-brand">
-        <div class="mk" style="width:26px;height:26px;border:2px solid var(--ink);background:var(--maroon);display:grid;place-items:center;font-family:var(--font-mono);font-weight:700;font-size:11px;color:#fff;">MD</div>
-        <b class="mono" style="font-size:13px;letter-spacing:0.02em;color:var(--ink);">MUNDER DIFFLIN, INC.</b>
+        <img class="brand-logo" src="./logo.png" width="1318" height="840" alt="Munder Difflin, Inc." />
       </div>
       <div class="foot-links">
         <a href="https://github.com/chaitanyagiri/munder-difflin">GitHub</a>

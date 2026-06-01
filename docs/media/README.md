@@ -4,10 +4,10 @@ Media assets the landing page (`../index.html`) embeds.
 
 ## What's here now
 
-On-brand **SVG posters** — shown as `<video poster>` and OpenGraph images so the page is
-never blank before videos are rendered:
+- `og.png` — canonical social preview (Open Graph, Twitter, hero `<video poster>`, README demo)
+- Legacy **SVG posters** (optional fallbacks if you re-point the page):
 
-- `hero-poster.svg` — office floor + live terminal (hero placeholder)
+- `hero-poster.svg` — office floor + live terminal (legacy placeholder)
 - `how-agents-poster.svg`
 - `how-mempalace-poster.svg`
 - `how-god-hive-poster.svg`

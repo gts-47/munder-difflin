@@ -20,6 +20,7 @@ import { SidebarSplitter } from '@/components/SidebarSplitter';
 import { acquireTerminal } from '@/components/terminalPool';
 import { FullscreenTerminal } from '@/components/FullscreenTerminal';
 import { FullscreenFileEditor } from '@/components/FullscreenFileEditor';
+import brandLogo from '@brand/logo.png?url';
 
 export function App() {
   const agent = useStore(selectedAgent);
@@ -114,23 +115,11 @@ export function App() {
           userSelect: 'none'
         }}
       >
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-          <span style={{
-            display: 'inline-grid', placeItems: 'center',
-            width: 20, height: 20,
-            background: '#6E1423', color: '#F4F1EA',
-            fontFamily: 'var(--cth-font-display)', fontSize: 7, letterSpacing: -1,
-            boxShadow: 'var(--cth-shadow-hard)'
-          }}>MD</span>
-          <span style={{
-            fontFamily: 'var(--cth-font-display)',
-            fontSize: 12,
-            lineHeight: '20px',
-            color: 'var(--cth-ink-900)'
-          }}>
-            MUNDER DIFFLIN
-          </span>
-        </span>
+        <img
+          src={brandLogo}
+          alt="Munder Difflin"
+          style={{ height: 20, width: 'auto', display: 'block' }}
+        />
         <span style={{
           fontFamily: 'var(--cth-font-ui)',
           fontSize: 14,
