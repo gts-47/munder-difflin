@@ -6,7 +6,15 @@ dist/
 .vite/
 .env
 .env.local
+.env.signing
 .gstack/
+
+# signing / notarization secrets — NEVER commit these
+*.p8
+*.p12
+*.cer
+*.mobileprovision
+build/AuthKey_*.p8
 
 # heavy hero source — only the compressed hero.mp4/.webm are deployed
 docs/media/*.mov

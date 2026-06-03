@@ -48,6 +48,21 @@ These builds are **not code-signed yet**, so your OS may warn on first open.
 - **Windows** — SmartScreen may show "Windows protected your PC" → **More info** → **Run anyway**.
 - **Linux** — make the AppImage executable: `chmod +x Munder-Difflin-*.AppImage`, then run it.
 
+### macOS keeps asking to access your Documents folder?
+
+Because the build is unsigned, macOS can't durably remember the folder-access grant
+(and **App Translocation** runs an un-de-quarantined app from a random path each
+launch), so the privacy prompt can reappear on every agent action. Two fixes:
+
+1. **Stop translocation first:** move the app into **/Applications**, then run
+   `xattr -dr com.apple.quarantine "/Applications/Munder Difflin.app"` and relaunch.
+2. **Grant access once:** open **System Settings → Privacy & Security → Full Disk
+   Access**, click **+**, add **Munder Difflin**, and toggle it on (this covers the
+   `claude` agents it spawns). Alternatively grant **Files and Folders → Documents**.
+
+Once the app is signed + notarized (see the signing note in `electron-builder.yml`),
+this becomes a single one-time prompt with no extra steps.
+
 ---
 
 ## Requirements

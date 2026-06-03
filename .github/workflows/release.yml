@@ -56,6 +56,17 @@ jobs:
         run: npx electron-builder ${{ matrix.args }} --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS code signing + notarization. ALL OPTIONAL: if these secrets are
+          # unset (forks, contributors), electron-builder falls back to an unsigned
+          # build and build/notarize.cjs no-ops — CI still succeeds. CSC_* drive the
+          # Developer ID signature; APPLE_* drive notarytool (see build/notarize.cjs).
+          #   CSC_LINK = base64 of the "Developer ID Application" .p12
+          #   CSC_KEY_PASSWORD = that .p12's export password
+          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Generate checksums
         shell: bash

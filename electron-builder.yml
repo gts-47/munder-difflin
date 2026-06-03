@@ -2,6 +2,10 @@ appId: in.munderdiffl.app
 productName: Munder Difflin
 copyright: Copyright © 2026 Chaitanya Giri
 
+# Notarize + staple after signing, but only when APPLE_* creds are in the env
+# (the hook no-ops otherwise, so contributor builds still work). Root-level hook.
+afterSign: build/notarize.cjs
+
 # electron-vite emits the app into out/; package exactly that plus what the
 # runtime needs. node-pty is native, so keep it out of the asar.
 directories:
@@ -24,8 +28,29 @@ npmRebuild: true
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
-  # Unsigned for now (no Developer ID). Gatekeeper note is in RELEASE.md.
-  identity: null
+  # Declare WHY the app touches the user's folders. macOS shows these strings in
+  # the privacy prompt and, for a signed app, remembers the grant — so the user
+  # is asked ONCE instead of on every agent action.
+  extendInfo:
+    NSDocumentsFolderUsageDescription: "Munder Difflin runs your Claude Code agents, which read and write files in the project folders you point them at."
+    NSDesktopFolderUsageDescription: "Munder Difflin's agents may work on projects located on your Desktop."
+    NSDownloadsFolderUsageDescription: "Munder Difflin's agents may work on projects located in your Downloads."
+    NSRemovableVolumesUsageDescription: "Munder Difflin's agents may work on projects located on external volumes."
+    NSNetworkVolumesUsageDescription: "Munder Difflin's agents may work on projects located on network volumes."
+  # Hardened runtime + entitlements so the spawned `claude` agents inherit this
+  # app's TCC responsibility (one grant covers them all) and node-pty can load.
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  gatekeeperAssess: false
+  # Signing: TCC binds a remembered grant to a STABLE code signature, so a signed
+  # build is asked for folder access ONCE. The "Developer ID Application" cert is
+  # auto-discovered from the login keychain (CSC_IDENTITY_AUTO_DISCOVERY). If no
+  # cert is found, electron-builder warns and produces an unsigned build, so
+  # contributors without an Apple account can still build.
+  #   To sign: install your "Developer ID Application" cert into the keychain.
+  #   (Override with CSC_LINK=<path-to.p12> + CSC_KEY_PASSWORD for CI.)
+  # Notarization happens in the root-level `afterSign` hook (top of this file).
   target:
     - target: dmg
       arch: [universal]
