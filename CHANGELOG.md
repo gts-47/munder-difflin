@@ -9,8 +9,9 @@ All notable changes to this project are documented here. The format is based on
 ## [0.1.4] — 2026-06-04
 
 ### Added
-- **Signed & notarized macOS builds.** The app now ships with a hardened-runtime
-  Developer ID signature and is notarized + stapled by Apple. Because macOS binds a
+- **Signed macOS builds.** The app now ships with a hardened-runtime Developer ID
+  signature (notarization is attempted in CI and stapled when it succeeds; the build is
+  best-effort, so a notarization hiccup never blocks a release). Because macOS binds a
   folder-access (TCC) grant to a stable code signature, you're now prompted for
   Documents/Desktop/Downloads access **once** instead of on every agent action.
   Usage-description strings explain each prompt. Signing/notarization run in CI only

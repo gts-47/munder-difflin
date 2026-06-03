@@ -41,10 +41,12 @@ Apple Silicon and Intel.
 
 ## First launch
 
-- **macOS** — the build is **signed with a Developer ID and notarized by Apple**, so it
-  opens normally. The first time agents touch a folder you'll get a single macOS privacy
-  prompt for Documents/Desktop/Downloads — allow it once and the grant sticks (it covers
-  the `claude` agents the app spawns).
+- **macOS** — the build is **signed with a Developer ID** (hardened runtime). If macOS
+  still shows an "unidentified developer" warning on first open, right-click the app →
+  **Open** → **Open** once. After that, the first time agents touch a folder you'll get a
+  single macOS privacy prompt for Documents/Desktop/Downloads — allow it once and the
+  grant sticks (it covers the `claude` agents the app spawns), because the grant is bound
+  to the app's stable signature.
 - **Windows** — not code-signed yet; SmartScreen may show "Windows protected your PC" →
   **More info** → **Run anyway**.
 - **Linux** — make the AppImage executable: `chmod +x Munder-Difflin-*.AppImage`, then run it.
