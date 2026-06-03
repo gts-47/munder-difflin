@@ -341,6 +341,39 @@ nav .links a:hover, nav .links a[aria-current="page"] { color: var(--ink); }
 .callout.tldr .ic { color: var(--maroon); }
 .callout.tldr strong { color: var(--ink); }
 
+/* comparison / feature tables (used heavily by the comparison cluster).
+   GitHub-style block+scroll so wide tables stay readable on mobile while the
+   columns keep aligning; neo-brutalist frame to match the rest of the system. */
+.prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  border: var(--border-bold);
+  box-shadow: var(--shadow-card-sm);
+  margin: 1.6em 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+.prose thead { background: var(--cream-2); }
+.prose th, .prose td {
+  border: var(--hair);
+  padding: 9px 13px;
+  text-align: left;
+  vertical-align: top;
+}
+.prose th {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--ink);
+  border-bottom: var(--border);
+  white-space: nowrap;
+}
+.prose tbody td:first-child { font-weight: 600; color: var(--ink); }
+.prose tbody tr:nth-child(even) { background: rgba(27, 27, 27, 0.035); }
+.prose table a:hover { background: var(--yellow); }
+
 /* in-post FAQ block (visible Q&A backing the FAQPage JSON-LD) */
 .faq { margin-top: 2em; }
 .faq h2 { margin-top: 0; }
