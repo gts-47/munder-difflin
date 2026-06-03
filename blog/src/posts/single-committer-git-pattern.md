@@ -1,6 +1,6 @@
 ---
 title: "The Single-Committer Pattern: Multi-Agent Git Without Corruption"
-description: "Parallel agents corrupt a repo with git index.lock races. The single-committer pattern — agents write files, one process commits — fixes concurrent git writes for good."
+description: "Parallel agents corrupt a repo with index.lock races. The single-committer pattern — agents write, one process commits — fixes concurrent git writes."
 date: 2026-06-02
 category: internals
 categoryLabel: Internals

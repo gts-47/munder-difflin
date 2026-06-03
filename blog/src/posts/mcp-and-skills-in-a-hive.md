@@ -1,6 +1,6 @@
 ---
 title: "Bringing Your MCP Servers and Skills Into a Hive of Agents"
-description: "How agents in a Claude Code MCP multi-agent hive inherit your existing MCP servers, skills, and tools automatically — and how to scope them per agent by role and directory."
+description: "How agents in a hive inherit your existing Claude Code MCP servers, skills, and tools — and how to scope which agent gets which capability."
 date: 2026-06-03
 category: guides
 categoryLabel: Guides

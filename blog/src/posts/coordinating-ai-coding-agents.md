@@ -1,6 +1,6 @@
 ---
 title: "The Best Way to Coordinate AI Coding Agents"
-description: "The best way to coordinate AI coding agents: single-writer files, a message router, a shared plan with one scribe, and an orchestrator — so agents cooperate, not clobber."
+description: "The best way to coordinate AI coding agents: single-writer files, a message router, a one-scribe plan, and an orchestrator — cooperate, not clobber."
 date: 2026-05-29
 category: orchestration
 categoryLabel: Orchestration

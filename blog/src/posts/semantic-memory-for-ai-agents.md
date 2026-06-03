@@ -1,6 +1,6 @@
 ---
 title: "Semantic Memory for AI Agents: Recall in Milliseconds"
-description: "What semantic memory for AI agents is, why a markdown-first store beats a heavyweight DB, and how a shared palace lets a hive recall the right note by meaning, fast."
+description: "What semantic memory for AI agents is, why a markdown-first store beats a heavy DB, and how a shared palace lets a hive recall a note by meaning, fast."
 date: 2026-05-26
 category: memory
 categoryLabel: Memory

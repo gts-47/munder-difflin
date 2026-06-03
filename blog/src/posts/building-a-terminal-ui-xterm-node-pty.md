@@ -1,6 +1,6 @@
 ---
 title: "Building a Terminal UI with xterm.js and node-pty"
-description: "Wire xterm.js to a node-pty backend: stream output, write keystrokes back, handle resize, and keep many live terminals fast with a persistent terminal pool."
+description: "Wire xterm.js to a node-pty backend: stream output, write keystrokes back, handle resize, and keep many live terminals fast with a terminal pool."
 date: 2026-06-03
 category: internals
 categoryLabel: Internals

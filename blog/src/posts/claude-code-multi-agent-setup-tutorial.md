@@ -1,6 +1,6 @@
 ---
 title: "Set Up a Claude Code Multi-Agent Workflow in 10 Minutes"
-description: "A from-zero Claude code multi-agent setup: install Munder Difflin, finish onboarding, spawn a few agents, and watch the GOD orchestrator route your first task."
+description: "A from-zero Claude Code multi-agent setup: install Munder Difflin, onboard, spawn a few agents, and watch the GOD orchestrator route your first task."
 date: 2026-05-24
 category: guides
 categoryLabel: Guides

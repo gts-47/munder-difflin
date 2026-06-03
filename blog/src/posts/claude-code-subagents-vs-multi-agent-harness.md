@@ -1,6 +1,6 @@
 ---
 title: "Claude Code Subagents vs a Multi-Agent Harness"
-description: "Claude Code subagents vs a multi-agent harness: where built-in subagents stop and an external harness with shared memory, messaging, and an orchestrator takes over."
+description: "Claude Code subagents vs a multi-agent harness: where subagents stop and a harness with shared memory, messaging, and an orchestrator takes over."
 date: 2026-05-23
 category: guides
 categoryLabel: Guides

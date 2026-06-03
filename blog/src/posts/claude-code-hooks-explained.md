@@ -1,6 +1,6 @@
 ---
 title: "Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)"
-description: "A practical tour of Claude Code hooks — the PreToolUse, PostToolUse, and Stop lifecycle — and how a Unix-socket hook shim drives an autonomous multi-agent office floor."
+description: "A practical tour of Claude Code hooks — the PreToolUse, PostToolUse, and Stop lifecycle — and how a Unix-socket hook shim drives a live office floor."
 date: 2026-06-03
 category: internals
 categoryLabel: Internals

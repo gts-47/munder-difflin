@@ -1,6 +1,6 @@
 ---
 title: "Inside the GOD Orchestrator: Routing, Adjudication, Escalation"
-description: "A deep dive into the Claude Code orchestrator: how a GOD supervisor agent reads requests, routes work, adjudicates routine traffic, and escalates the critical few."
+description: "A deep dive into the Claude Code orchestrator: how a GOD agent reads requests, routes work, adjudicates routine traffic, and escalates the critical few."
 date: 2026-05-30
 category: orchestration
 categoryLabel: Orchestration

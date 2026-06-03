@@ -1,6 +1,6 @@
 ---
 title: "Atomic File Mailboxes: How Agents Message Each Other"
-description: "Can Claude Code agents talk to each other? Yes — here's the outbox-router-inbox design that lets agents message safely using plain files and atomic renames."
+description: "Can Claude Code agents talk to each other? Yes — the outbox-router-inbox design that lets agents message safely using plain files and atomic renames."
 date: 2026-05-31
 category: internals
 categoryLabel: Internals

@@ -1,6 +1,6 @@
 ---
 title: "Claude Code Automation: Let Agents Build While You Sleep"
-description: "Claude Code automation that runs overnight: set up an autonomous Stop-hook loop, bypass permission prompts safely, and add guardrails so you wake up to progress not chaos."
+description: "Claude Code automation that runs overnight: an autonomous Stop-hook loop, safe permission bypass, and guardrails so you wake up to progress, not chaos."
 date: 2026-06-04
 category: guides
 categoryLabel: Guides

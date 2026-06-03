@@ -1,6 +1,6 @@
 ---
 title: "Git Worktrees vs a Hive: Two Ways to Parallelize Claude Code"
-description: "Claude Code git worktrees vs a coordinating hive: when isolated worktrees are enough for parallel agents, and when you need messaging, memory, and an orchestrator on top."
+description: "Claude Code git worktrees vs a hive: when isolated worktrees suffice for parallel agents, and when you need memory, messaging, and an orchestrator on top."
 date: 2026-06-04
 category: orchestration
 categoryLabel: Orchestration
