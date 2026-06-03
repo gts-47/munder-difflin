@@ -224,7 +224,8 @@ steering wheel.</p>
 <p>If you’ve ever wondered whether built-in mechanisms are enough versus an external coordination layer,
 the same question shows up for <a href="/blog/claude-code-subagents-vs-multi-agent-harness/">subagents vs a harness</a> —
 and the answer rhymes: native primitives handle the small scale; a coordination layer handles the team
-scale.</p>
+scale. For a concrete tool-vs-tool take on that coordination layer, see
+<a href="/blog/claude-squad-vs-munder-difflin/">Claude Squad vs Munder Difflin</a>.</p>
 <h2 id="faq" tabindex="-1">FAQ <a class="anchor" href="#faq" aria-hidden="true">#</a></h2>
 <p><strong>Do worktrees prevent all git conflicts?</strong> They prevent index and working-directory collisions, which
 are the common ones. Shared refs and the object store are still common, so concurrent operations that
@@ -234,7 +235,7 @@ repo even when agents work in separate worktrees.</p>
 truly independent, worktrees alone are the lighter, correct choice. Add the hive when coordination —
 not just isolation — is the thing you’re missing.</p>
 <hr>
-<p>Munder Difflin is the coordination layer: shared memory, messaging, and a GOD orchestrator for a hive
+<p>Munder Difflin is <a href="https://munderdiffl.in/#how">the coordination layer</a>: shared memory, messaging, and a GOD orchestrator for a hive
 of Claude Code agents — and it plays nicely with the git workflow you already use.
 <a href="https://munderdiffl.in/#install">Download Munder Difflin</a> when isolation isn’t enough and you need a
 team; it’s free and open source.</p>
@@ -299,7 +300,7 @@ team; it’s free and open source.</p>
       <span>5 min</span>
     </div>
     <h3><a href="/blog/human-in-the-loop-ai-agents/">Human-in-the-Loop AI Agents: Approvals That Don&#39;t Slow You Down</a></h3>
-    <p class="dek">Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope — and relays your answer back.</p>
+    <p class="dek">Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope changes.</p>
     <div class="foot">
       <span class="tag kind">Orchestration</span>
       <a class="more" href="/blog/human-in-the-loop-ai-agents/" aria-label="Read: Human-in-the-Loop AI Agents: Approvals That Don&#39;t Slow You Down">Read →</a>

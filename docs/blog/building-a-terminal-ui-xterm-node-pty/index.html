@@ -272,7 +272,9 @@ unsubscribe from the stream, <code>term.dispose()</code>, and drop it from the p
 sessions, not a leak.</li>
 </ul>
 <p>The deeper performance story — rendering backends, batching writes, and keeping CPU flat with many
-streaming PTYs — is its own topic, but the pool is the structural decision everything else builds on.</p>
+streaming PTYs — gets its own deep dive in
+<a href="/blog/rendering-many-live-terminals-performance/">rendering many live terminals without melting the CPU</a>,
+but the pool is the structural decision everything else builds on.</p>
 <h2 id="why-a-harness-needs-all-of-this" tabindex="-1">Why a harness needs all of this <a class="anchor" href="#why-a-harness-needs-all-of-this" aria-hidden="true">#</a></h2>
 <p>An agent harness shows you many live terminals — one per agent — and lets you switch, zoom, and watch
 them stream simultaneously. Every detail above is load-bearing for that: real shells from
@@ -335,13 +337,49 @@ to watch many real terminals at once; it’s free and open source.</p>
   </div>
 
   <footer class="post-foot wrap"><div class="prevnext">
-      <a class="pn prev" href="/blog/claude-code-hooks-explained/"><span class="k">← Older</span><span class="t">Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)</span></a>
-      <a class="pn next" href="/blog/claude-squad-vs-munder-difflin/"><span class="k">Newer →</span><span class="t">Claude Squad vs Munder Difflin: Which Should You Use?</span></a>
+      <a class="pn prev" href="/blog/building-an-ai-office-floor/"><span class="k">← Older</span><span class="t">Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</span></a>
+      <a class="pn next" href="/blog/debugging-multi-agent-systems/"><span class="k">Newer →</span><span class="t">How to Debug a Multi-Agent System</span></a>
     </div>
     <section class="related">
       <h2>Related in Internals</h2>
       <div class="post-grid">
         <article class="card">
+  <a class="thumb t-internals" href="/blog/architecture-two-planes-one-renderer/" aria-hidden="true" tabindex="-1">
+    <span>INTERNALS</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>5 min</span>
+    </div>
+    <h3><a href="/blog/architecture-two-planes-one-renderer/">Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer</a></h3>
+    <p class="dek">A walkthrough of the multi-agent harness architecture: a node-pty terminal plane and a hooks/hive event plane feeding one React + Pixi.js renderer.</p>
+    <div class="foot">
+      <span class="tag kind">Internals</span>
+      <a class="more" href="/blog/architecture-two-planes-one-renderer/" aria-label="Read: Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
+  <a class="thumb t-internals" href="/blog/building-an-ai-office-floor/" aria-hidden="true" tabindex="-1">
+    <span>INTERNALS</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-03">Jun 3, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>6 min</span>
+    </div>
+    <h3><a href="/blog/building-an-ai-office-floor/">Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</a></h3>
+    <p class="dek">The game-dev techniques behind a dev tool&#39;s office floor: Tiled maps, BFS pathfinding, sprite recoloring, and flying message envelopes in Pixi.js.</p>
+    <div class="foot">
+      <span class="tag kind">Internals</span>
+      <a class="more" href="/blog/building-an-ai-office-floor/" aria-label="Read: Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
   <a class="thumb t-internals" href="/blog/claude-code-hooks-explained/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
@@ -356,42 +394,6 @@ to watch many real terminals at once; it’s free and open source.</p>
     <div class="foot">
       <span class="tag kind">Internals</span>
       <a class="more" href="/blog/claude-code-hooks-explained/" aria-label="Read: Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card">
-  <a class="thumb t-internals" href="/blog/node-pty-electron-real-terminals/" aria-hidden="true" tabindex="-1">
-    <span>INTERNALS</span>
-  </a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-03">Jun 3, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>7 min</span>
-    </div>
-    <h3><a href="/blog/node-pty-electron-real-terminals/">Real Terminals in Electron with node-pty</a></h3>
-    <p class="dek">How to run byte-for-byte authentic shells inside Electron with node-pty: the native-rebuild gotcha, the macOS PATH trap, and streaming PTY output over IPC.</p>
-    <div class="foot">
-      <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/node-pty-electron-real-terminals/" aria-label="Read: Real Terminals in Electron with node-pty">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card">
-  <a class="thumb t-internals" href="/blog/single-committer-git-pattern/" aria-hidden="true" tabindex="-1">
-    <span>INTERNALS</span>
-  </a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-02">Jun 2, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/single-committer-git-pattern/">The Single-Committer Pattern: Multi-Agent Git Without Corruption</a></h3>
-    <p class="dek">Parallel agents corrupt a repo with index.lock races. The single-committer pattern — agents write, one process commits — fixes concurrent git writes.</p>
-    <div class="foot">
-      <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/single-committer-git-pattern/" aria-label="Read: The Single-Committer Pattern: Multi-Agent Git Without Corruption">Read →</a>
     </div>
   </div>
 </article>

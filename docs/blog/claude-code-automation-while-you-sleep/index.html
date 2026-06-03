@@ -191,8 +191,10 @@ escalate to a human queue instead of executing. A good default critical list:</p
 <li><strong>conflicts</strong> the team can’t resolve.</li>
 </ul>
 <p>In a hive, the <a href="/blog/how-the-god-orchestrator-works/">orchestrator</a> enforces this: routine decisions
-it makes itself, critical ones it routes to an approvals queue. You come back in the morning to a short
-list of “I needed your call on these,” not a pile of irreversible actions.</p>
+it makes itself, critical ones it routes to an approvals queue — the
+<a href="/blog/human-in-the-loop-ai-agents/">human-in-the-loop approvals</a> that keep an overnight run safe. You
+come back in the morning to a short list of “I needed your call on these,” not a pile of irreversible
+actions.</p>
 <h3 id="bounded-scope" tabindex="-1">Bounded scope <a class="anchor" href="#bounded-scope" aria-hidden="true">#</a></h3>
 <p>Don’t point an unattended team at “improve the codebase.” Give it a concrete, finishable goal: “add
 validation to these three forms, with tests.” Bounded scope means the queue drains to empty — which,
@@ -229,7 +231,7 @@ shouldn’t be handed open-ended mandates with money or production access. The r
 diligent overnight shift with a clear ticket list and a manager who escalates — not a genie. Keep the
 goals concrete and the guardrails tight, and the overnight shift earns its keep.</p>
 <hr>
-<p>Munder Difflin gives you the whole kit: an autonomous Stop-hook loop, an auto mode that skips routine
+<p>Munder Difflin gives you <a href="https://munderdiffl.in/#why">everything an overnight hive needs</a>: an autonomous Stop-hook loop, an auto mode that skips routine
 approvals, an orchestrator that escalates only the critical few, and a git audit log of the night.
 <a href="https://munderdiffl.in/#install">Download Munder Difflin</a> to let a hive of Claude Code agents build
 while you sleep; it’s free and open source.</p>
@@ -284,6 +286,24 @@ while you sleep; it’s free and open source.</p>
       <h2>Related in Guides</h2>
       <div class="post-grid">
         <article class="card">
+  <a class="thumb t-guides" href="/blog/debugging-multi-agent-systems/" aria-hidden="true" tabindex="-1">
+    <span>GUIDES</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>5 min</span>
+    </div>
+    <h3><a href="/blog/debugging-multi-agent-systems/">How to Debug a Multi-Agent System</a></h3>
+    <p class="dek">How to debug a multi-agent system: use the event log, per-agent terminals, message trails, and git history to find why a hive of AI agents went sideways.</p>
+    <div class="foot">
+      <span class="tag kind">Guides</span>
+      <a class="more" href="/blog/debugging-multi-agent-systems/" aria-label="Read: How to Debug a Multi-Agent System">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
   <a class="thumb t-guides" href="/blog/mcp-and-skills-in-a-hive/" aria-hidden="true" tabindex="-1">
     <span>GUIDES</span>
   </a>
@@ -316,24 +336,6 @@ while you sleep; it’s free and open source.</p>
     <div class="foot">
       <span class="tag kind">Guides</span>
       <a class="more" href="/blog/how-to-run-multiple-claude-code-agents/" aria-label="Read: How to Run Multiple Claude Code Agents (Without Losing Track)">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card">
-  <a class="thumb t-guides" href="/blog/manage-multiple-claude-code-sessions/" aria-hidden="true" tabindex="-1">
-    <span>GUIDES</span>
-  </a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-05-25">May 25, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>4 min</span>
-    </div>
-    <h3><a href="/blog/manage-multiple-claude-code-sessions/">How to Manage Multiple Claude Code Sessions Like a Pro</a></h3>
-    <p class="dek">Tactics to manage multiple Claude Code sessions without losing track: naming, roles, context isolation, and when a harness beats juggling terminal tabs.</p>
-    <div class="foot">
-      <span class="tag kind">Guides</span>
-      <a class="more" href="/blog/manage-multiple-claude-code-sessions/" aria-label="Read: How to Manage Multiple Claude Code Sessions Like a Pro">Read →</a>
     </div>
   </div>
 </article>

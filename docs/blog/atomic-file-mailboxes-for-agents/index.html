@@ -246,7 +246,7 @@ scans every outbox on a tick, delivers what it finds, and goes back to sleep.</p
 <p><strong>Can an agent message itself?</strong> It can, but there’s rarely a reason to. The interesting traffic is
 agent-to-agent and agent-to-orchestrator.</p>
 <hr>
-<p>Munder Difflin runs exactly this mailbox system for a whole hive of Claude Code agents — atomic
+<p>Munder Difflin runs exactly this mailbox system inside <a href="https://munderdiffl.in/#how">a hive the GOD orchestrator runs</a> — atomic
 delivery, speech-act messages, hop caps, and a full git audit trail, all local.
 <a href="https://munderdiffl.in/#install">Download Munder Difflin</a> to watch envelopes fly between agents on
 the office floor; it’s free and open source.</p>
@@ -301,6 +301,24 @@ the office floor; it’s free and open source.</p>
       <h2>Related in Internals</h2>
       <div class="post-grid">
         <article class="card">
+  <a class="thumb t-internals" href="/blog/architecture-two-planes-one-renderer/" aria-hidden="true" tabindex="-1">
+    <span>INTERNALS</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>5 min</span>
+    </div>
+    <h3><a href="/blog/architecture-two-planes-one-renderer/">Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer</a></h3>
+    <p class="dek">A walkthrough of the multi-agent harness architecture: a node-pty terminal plane and a hooks/hive event plane feeding one React + Pixi.js renderer.</p>
+    <div class="foot">
+      <span class="tag kind">Internals</span>
+      <a class="more" href="/blog/architecture-two-planes-one-renderer/" aria-label="Read: Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
   <a class="thumb t-internals" href="/blog/building-a-terminal-ui-xterm-node-pty/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
@@ -319,7 +337,7 @@ the office floor; it’s free and open source.</p>
   </div>
 </article>
 <article class="card">
-  <a class="thumb t-internals" href="/blog/claude-code-hooks-explained/" aria-hidden="true" tabindex="-1">
+  <a class="thumb t-internals" href="/blog/building-an-ai-office-floor/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
   <div class="body">
@@ -328,29 +346,11 @@ the office floor; it’s free and open source.</p>
       <span class="dot" aria-hidden="true"></span>
       <span>6 min</span>
     </div>
-    <h3><a href="/blog/claude-code-hooks-explained/">Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)</a></h3>
-    <p class="dek">A practical tour of Claude Code hooks — the PreToolUse, PostToolUse, and Stop lifecycle — and how a Unix-socket hook shim drives a live office floor.</p>
+    <h3><a href="/blog/building-an-ai-office-floor/">Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</a></h3>
+    <p class="dek">The game-dev techniques behind a dev tool&#39;s office floor: Tiled maps, BFS pathfinding, sprite recoloring, and flying message envelopes in Pixi.js.</p>
     <div class="foot">
       <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/claude-code-hooks-explained/" aria-label="Read: Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card">
-  <a class="thumb t-internals" href="/blog/node-pty-electron-real-terminals/" aria-hidden="true" tabindex="-1">
-    <span>INTERNALS</span>
-  </a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-03">Jun 3, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>7 min</span>
-    </div>
-    <h3><a href="/blog/node-pty-electron-real-terminals/">Real Terminals in Electron with node-pty</a></h3>
-    <p class="dek">How to run byte-for-byte authentic shells inside Electron with node-pty: the native-rebuild gotcha, the macOS PATH trap, and streaming PTY output over IPC.</p>
-    <div class="foot">
-      <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/node-pty-electron-real-terminals/" aria-label="Read: Real Terminals in Electron with node-pty">Read →</a>
+      <a class="more" href="/blog/building-an-ai-office-floor/" aria-label="Read: Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes">Read →</a>
     </div>
   </div>
 </article>

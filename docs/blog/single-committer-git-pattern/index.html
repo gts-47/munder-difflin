@@ -205,8 +205,9 @@ interactive input.</p>
 <h2 id="the-bonus-git-becomes-an-audit-log" tabindex="-1">The bonus: git becomes an audit log <a class="anchor" href="#the-bonus-git-becomes-an-audit-log" aria-hidden="true">#</a></h2>
 <p>Here’s the part that turns a workaround into an asset. Once one process owns every commit, the repo
 stops being a liability and becomes a <strong>serialized history of everything the team did</strong>. Each routed
-message, each task assignment, each memory update lands as its own commit, in order. When a multi-agent
-run goes sideways, you don’t guess — you read the log.</p>
+message, each task assignment, each memory update lands as its own commit, in order — a natural
+companion to the <a href="/blog/append-only-event-log-agents/">append-only event log</a> the hive also keeps. When
+a multi-agent run goes sideways, you don’t guess — you read the history.</p>
 <p>That pairs naturally with the messaging layer: agents coordinate through files (see
 <a href="/blog/atomic-file-mailboxes-for-agents/">atomic file mailboxes</a>), and the single committer commits
 those file changes as they happen. The same single-writer discipline runs through both — it’s the
@@ -235,7 +236,7 @@ refs can still contend. Worktrees and single-committer solve different halves of
 it does nothing for a <em>stale</em> lock from a dead process — that one never clears on its own. You need the
 age-based cleanup, not just retries.</p>
 <hr>
-<p>Munder Difflin uses the single-committer pattern for its entire coordination layer: agents write
+<p>Munder Difflin uses the single-committer pattern across the <a href="https://munderdiffl.in/#what">multi-agent harness</a>: agents write
 files, one process commits with retry and stale-lock recovery, and the repo stays a clean audit log.
 <a href="https://munderdiffl.in/#install">Download Munder Difflin</a> to run a hive of Claude Code agents that
 never corrupt their own state; it’s free and open source.</p>
@@ -283,13 +284,31 @@ never corrupt their own state; it’s free and open source.</p>
   </div>
 
   <footer class="post-foot wrap"><div class="prevnext">
-      <a class="pn prev" href="/blog/what-are-claude-code-agents/"><span class="k">← Older</span><span class="t">What Are Claude Code Agents? And How to Use Many at Once</span></a>
+      <a class="pn prev" href="/blog/visualizing-ai-agents-pixijs/"><span class="k">← Older</span><span class="t">Visualizing AI Agents with Pixi.js: An Office You Can Watch</span></a>
       <a class="pn next" href="/blog/run-an-office-of-ai-agents/"><span class="k">Newer →</span><span class="t">Run an Office of AI Agents While You Sleep</span></a>
     </div>
     <section class="related">
       <h2>Related in Internals</h2>
       <div class="post-grid">
         <article class="card">
+  <a class="thumb t-internals" href="/blog/architecture-two-planes-one-renderer/" aria-hidden="true" tabindex="-1">
+    <span>INTERNALS</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>5 min</span>
+    </div>
+    <h3><a href="/blog/architecture-two-planes-one-renderer/">Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer</a></h3>
+    <p class="dek">A walkthrough of the multi-agent harness architecture: a node-pty terminal plane and a hooks/hive event plane feeding one React + Pixi.js renderer.</p>
+    <div class="foot">
+      <span class="tag kind">Internals</span>
+      <a class="more" href="/blog/architecture-two-planes-one-renderer/" aria-label="Read: Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
   <a class="thumb t-internals" href="/blog/building-a-terminal-ui-xterm-node-pty/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
@@ -308,7 +327,7 @@ never corrupt their own state; it’s free and open source.</p>
   </div>
 </article>
 <article class="card">
-  <a class="thumb t-internals" href="/blog/claude-code-hooks-explained/" aria-hidden="true" tabindex="-1">
+  <a class="thumb t-internals" href="/blog/building-an-ai-office-floor/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
   <div class="body">
@@ -317,29 +336,11 @@ never corrupt their own state; it’s free and open source.</p>
       <span class="dot" aria-hidden="true"></span>
       <span>6 min</span>
     </div>
-    <h3><a href="/blog/claude-code-hooks-explained/">Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)</a></h3>
-    <p class="dek">A practical tour of Claude Code hooks — the PreToolUse, PostToolUse, and Stop lifecycle — and how a Unix-socket hook shim drives a live office floor.</p>
+    <h3><a href="/blog/building-an-ai-office-floor/">Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</a></h3>
+    <p class="dek">The game-dev techniques behind a dev tool&#39;s office floor: Tiled maps, BFS pathfinding, sprite recoloring, and flying message envelopes in Pixi.js.</p>
     <div class="foot">
       <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/claude-code-hooks-explained/" aria-label="Read: Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card">
-  <a class="thumb t-internals" href="/blog/node-pty-electron-real-terminals/" aria-hidden="true" tabindex="-1">
-    <span>INTERNALS</span>
-  </a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-03">Jun 3, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>7 min</span>
-    </div>
-    <h3><a href="/blog/node-pty-electron-real-terminals/">Real Terminals in Electron with node-pty</a></h3>
-    <p class="dek">How to run byte-for-byte authentic shells inside Electron with node-pty: the native-rebuild gotcha, the macOS PATH trap, and streaming PTY output over IPC.</p>
-    <div class="foot">
-      <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/node-pty-electron-real-terminals/" aria-label="Read: Real Terminals in Electron with node-pty">Read →</a>
+      <a class="more" href="/blog/building-an-ai-office-floor/" aria-label="Read: Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes">Read →</a>
     </div>
   </div>
 </article>

@@ -212,7 +212,8 @@ flags and environment variables.</p>
 <p>Every tool event the harness receives is forwarded to the UI. That’s what drives the office floor: when
 an agent calls a file tool, its avatar walks to the right station; when it runs a command, it moves to
 a terminal. Because the events are structured and come straight from Claude, the visualization reflects
-<em>real</em> activity rather than a scripted animation or fragile log-scraping.</p>
+<em>real</em> activity rather than a scripted animation or fragile log-scraping — and it pairs with each
+agent’s actual live terminal, <a href="/blog/rendering-many-live-terminals-performance/">streamed without melting the CPU</a>.</p>
 <h3 id="stop-the-autonomous-loop" tabindex="-1">Stop → the autonomous loop <a class="anchor" href="#stop-the-autonomous-loop" aria-hidden="true">#</a></h3>
 <p>This is where hooks earn their keep. When an agent’s <code>Stop</code> hook fires, the harness checks that agent’s
 inbox for unread messages. If there are any, it returns <code>{&quot;decision&quot;:&quot;block&quot;,&quot;reason&quot;: &lt;the messages&gt;}</code> — so instead of stopping, the agent reads its new messages and keeps working. If the inbox
@@ -247,7 +248,7 @@ queue for that judgment, but the hook-level gate is available.</p>
 payload over a local socket adds negligible overhead, which is exactly why the heavy logic lives
 elsewhere.</p>
 <hr>
-<p>Munder Difflin turns Claude Code’s hook lifecycle into a live, autonomous office: real-time avatars
+<p>Munder Difflin turns Claude Code’s hook lifecycle into <a href="https://munderdiffl.in/#how">a live, autonomous office</a>: real-time avatars
 from tool events and a self-draining work loop from the Stop hook — all without editing your repo.
 <a href="https://munderdiffl.in/#install">Download Munder Difflin</a> to see hooks driving a hive of agents; it’s
 free and open source.</p>
@@ -296,12 +297,30 @@ free and open source.</p>
 
   <footer class="post-foot wrap"><div class="prevnext">
       <a class="pn prev" href="/blog/claude-squad-alternative/"><span class="k">← Older</span><span class="t">Looking for a Claude Squad Alternative?</span></a>
-      <a class="pn next" href="/blog/building-a-terminal-ui-xterm-node-pty/"><span class="k">Newer →</span><span class="t">Building a Terminal UI with xterm.js and node-pty</span></a>
+      <a class="pn next" href="/blog/building-an-ai-office-floor/"><span class="k">Newer →</span><span class="t">Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</span></a>
     </div>
     <section class="related">
       <h2>Related in Internals</h2>
       <div class="post-grid">
         <article class="card">
+  <a class="thumb t-internals" href="/blog/architecture-two-planes-one-renderer/" aria-hidden="true" tabindex="-1">
+    <span>INTERNALS</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>5 min</span>
+    </div>
+    <h3><a href="/blog/architecture-two-planes-one-renderer/">Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer</a></h3>
+    <p class="dek">A walkthrough of the multi-agent harness architecture: a node-pty terminal plane and a hooks/hive event plane feeding one React + Pixi.js renderer.</p>
+    <div class="foot">
+      <span class="tag kind">Internals</span>
+      <a class="more" href="/blog/architecture-two-planes-one-renderer/" aria-label="Read: Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
   <a class="thumb t-internals" href="/blog/building-a-terminal-ui-xterm-node-pty/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
@@ -320,38 +339,20 @@ free and open source.</p>
   </div>
 </article>
 <article class="card">
-  <a class="thumb t-internals" href="/blog/node-pty-electron-real-terminals/" aria-hidden="true" tabindex="-1">
+  <a class="thumb t-internals" href="/blog/building-an-ai-office-floor/" aria-hidden="true" tabindex="-1">
     <span>INTERNALS</span>
   </a>
   <div class="body">
     <div class="meta">
       <time datetime="2026-06-03">Jun 3, 2026</time>
       <span class="dot" aria-hidden="true"></span>
-      <span>7 min</span>
+      <span>6 min</span>
     </div>
-    <h3><a href="/blog/node-pty-electron-real-terminals/">Real Terminals in Electron with node-pty</a></h3>
-    <p class="dek">How to run byte-for-byte authentic shells inside Electron with node-pty: the native-rebuild gotcha, the macOS PATH trap, and streaming PTY output over IPC.</p>
+    <h3><a href="/blog/building-an-ai-office-floor/">Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</a></h3>
+    <p class="dek">The game-dev techniques behind a dev tool&#39;s office floor: Tiled maps, BFS pathfinding, sprite recoloring, and flying message envelopes in Pixi.js.</p>
     <div class="foot">
       <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/node-pty-electron-real-terminals/" aria-label="Read: Real Terminals in Electron with node-pty">Read →</a>
-    </div>
-  </div>
-</article>
-<article class="card">
-  <a class="thumb t-internals" href="/blog/single-committer-git-pattern/" aria-hidden="true" tabindex="-1">
-    <span>INTERNALS</span>
-  </a>
-  <div class="body">
-    <div class="meta">
-      <time datetime="2026-06-02">Jun 2, 2026</time>
-      <span class="dot" aria-hidden="true"></span>
-      <span>5 min</span>
-    </div>
-    <h3><a href="/blog/single-committer-git-pattern/">The Single-Committer Pattern: Multi-Agent Git Without Corruption</a></h3>
-    <p class="dek">Parallel agents corrupt a repo with index.lock races. The single-committer pattern — agents write, one process commits — fixes concurrent git writes.</p>
-    <div class="foot">
-      <span class="tag kind">Internals</span>
-      <a class="more" href="/blog/single-committer-git-pattern/" aria-label="Read: The Single-Committer Pattern: Multi-Agent Git Without Corruption">Read →</a>
+      <a class="more" href="/blog/building-an-ai-office-floor/" aria-label="Read: Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes">Read →</a>
     </div>
   </div>
 </article>

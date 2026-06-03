@@ -8,6 +8,14 @@
   <id>https://munderdiffl.in/blog/</id>
   <author><name>Chaitanya Giri</name><uri>https://munderdiffl.in</uri></author>
   <entry>
+    <title>Munder Difflin&#39;s Architecture: Two Data Planes, One Renderer</title>
+    <link href="https://munderdiffl.in/blog/architecture-two-planes-one-renderer/" />
+    <id>https://munderdiffl.in/blog/architecture-two-planes-one-renderer/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Internals" />
+    <summary>A walkthrough of the multi-agent harness architecture: a node-pty terminal plane and a hooks/hive event plane feeding one React + Pixi.js renderer.</summary>
+  </entry>
+  <entry>
     <title>The Best Tools to Run Multiple Claude Code Agents (2026)</title>
     <link href="https://munderdiffl.in/blog/best-claude-code-multi-agent-tools/" />
     <id>https://munderdiffl.in/blog/best-claude-code-multi-agent-tools/</id>
@@ -48,12 +56,28 @@
     <summary>Claude Squad vs Munder Difflin: a lean terminal session manager against a memory-backed, orchestrated, visual hive. Feature table and an honest verdict.</summary>
   </entry>
   <entry>
+    <title>How to Debug a Multi-Agent System</title>
+    <link href="https://munderdiffl.in/blog/debugging-multi-agent-systems/" />
+    <id>https://munderdiffl.in/blog/debugging-multi-agent-systems/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Guides" />
+    <summary>How to debug a multi-agent system: use the event log, per-agent terminals, message trails, and git history to find why a hive of AI agents went sideways.</summary>
+  </entry>
+  <entry>
     <title>Building a Terminal UI with xterm.js and node-pty</title>
     <link href="https://munderdiffl.in/blog/building-a-terminal-ui-xterm-node-pty/" />
     <id>https://munderdiffl.in/blog/building-a-terminal-ui-xterm-node-pty/</id>
     <published>2026-06-03T00:00:00.000Z</published>
     <updated>2026-06-03T00:00:00.000Z</updated><category term="Internals" />
     <summary>Wire xterm.js to a node-pty backend: stream output, write keystrokes back, handle resize, and keep many live terminals fast with a terminal pool.</summary>
+  </entry>
+  <entry>
+    <title>Building an AI &quot;Office Floor&quot;: Avatars, Pathfinding, Envelopes</title>
+    <link href="https://munderdiffl.in/blog/building-an-ai-office-floor/" />
+    <id>https://munderdiffl.in/blog/building-an-ai-office-floor/</id>
+    <published>2026-06-03T00:00:00.000Z</published>
+    <updated>2026-06-03T00:00:00.000Z</updated><category term="Internals" />
+    <summary>The game-dev techniques behind a dev tool&#39;s office floor: Tiled maps, BFS pathfinding, sprite recoloring, and flying message envelopes in Pixi.js.</summary>
   </entry>
   <entry>
     <title>Claude Code Hooks, Explained (PreToolUse, PostToolUse, Stop)</title>
@@ -104,6 +128,14 @@
     <summary>How to run byte-for-byte authentic shells inside Electron with node-pty: the native-rebuild gotcha, the macOS PATH trap, and streaming PTY output over IPC.</summary>
   </entry>
   <entry>
+    <title>Rendering Many Live Terminals Without Melting the CPU</title>
+    <link href="https://munderdiffl.in/blog/rendering-many-live-terminals-performance/" />
+    <id>https://munderdiffl.in/blog/rendering-many-live-terminals-performance/</id>
+    <published>2026-06-03T00:00:00.000Z</published>
+    <updated>2026-06-03T00:00:00.000Z</updated><category term="Internals" />
+    <summary>xterm.js performance for many live PTYs: a terminal pool, render-only-visible, smart scrollback, and accelerated rendering to stream dozens at once.</summary>
+  </entry>
+  <entry>
     <title>A vibe-kanban Alternative for Coordinating AI Agents</title>
     <link href="https://munderdiffl.in/blog/vibe-kanban-alternative/" />
     <id>https://munderdiffl.in/blog/vibe-kanban-alternative/</id>
@@ -141,7 +173,7 @@
     <id>https://munderdiffl.in/blog/human-in-the-loop-ai-agents/</id>
     <published>2026-06-02T00:00:00.000Z</published>
     <updated>2026-06-02T00:00:00.000Z</updated><category term="Orchestration" />
-    <summary>Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope — and relays your answer back.</summary>
+    <summary>Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope changes.</summary>
   </entry>
   <entry>
     <title>Munder Difflin FAQ: Everything People Ask</title>
@@ -166,6 +198,14 @@
     <published>2026-06-02T00:00:00.000Z</published>
     <updated>2026-06-02T00:00:00.000Z</updated><category term="Internals" />
     <summary>Parallel agents corrupt a repo with index.lock races. The single-committer pattern — agents write, one process commits — fixes concurrent git writes.</summary>
+  </entry>
+  <entry>
+    <title>Visualizing AI Agents with Pixi.js: An Office You Can Watch</title>
+    <link href="https://munderdiffl.in/blog/visualizing-ai-agents-pixijs/" />
+    <id>https://munderdiffl.in/blog/visualizing-ai-agents-pixijs/</id>
+    <published>2026-06-02T00:00:00.000Z</published>
+    <updated>2026-06-02T00:00:00.000Z</updated><category term="Internals" />
+    <summary>How we render AI agents as avatars on a Pixi.js office floor — driven by real hook and message events, with seat assignment, pathing, and flying envelopes.</summary>
   </entry>
   <entry>
     <title>What Are Claude Code Agents? And How to Use Many at Once</title>
@@ -197,7 +237,7 @@
     <id>https://munderdiffl.in/blog/append-only-event-log-agents/</id>
     <published>2026-06-01T00:00:00.000Z</published>
     <updated>2026-06-01T00:00:00.000Z</updated><category term="Internals" />
-    <summary>How an append-only event log makes a multi-agent system debuggable and replayable — what to record per event, and why one JSON line per event beats a database.</summary>
+    <summary>How an append-only event log makes a multi-agent system debuggable and replayable: what to record, and why one JSON line per event beats a database.</summary>
   </entry>
   <entry>
     <title>How to Run Multiple Claude Code Agents (Without Losing Track)</title>
@@ -246,6 +286,14 @@
     <published>2026-05-27T00:00:00.000Z</published>
     <updated>2026-05-27T00:00:00.000Z</updated><category term="Memory" />
     <summary>Claude Code forgets between sessions. Here&#39;s how a markdown-first memory layer with semantic recall lets your agents remember across runs.</summary>
+  </entry>
+  <entry>
+    <title>Why We Built Agent Memory Markdown-First</title>
+    <link href="https://munderdiffl.in/blog/markdown-first-agent-memory/" />
+    <id>https://munderdiffl.in/blog/markdown-first-agent-memory/</id>
+    <published>2026-05-27T00:00:00.000Z</published>
+    <updated>2026-05-27T00:00:00.000Z</updated><category term="Memory" />
+    <summary>Markdown-first AI agent long-term memory: plain notes a human can read and git can diff, with a semantic index on top that degrades gracefully.</summary>
   </entry>
   <entry>
     <title>Semantic Memory for AI Agents: Recall in Milliseconds</title>

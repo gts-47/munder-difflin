@@ -184,8 +184,9 @@ of markdown never does.</li>
 runtime</em> — they assume they’re the thing running the loop. But when your agents are real <code>claude</code>
 sessions, the runtime is already Claude Code. The memory layer should be a lightweight companion to
 that, not a replacement for it. Markdown files plus a CLI-driven index fit that shape; a framework that
-wants to be in charge doesn’t. (For the deeper case, see
-<a href="/blog/give-claude-code-long-term-memory/">how to give Claude Code long-term memory</a>.)</p>
+wants to be in charge doesn’t. (For the full argument, see
+<a href="/blog/markdown-first-agent-memory/">why we built agent memory markdown-first</a>; for the plain-English
+version, <a href="/blog/give-claude-code-long-term-memory/">how to give Claude Code long-term memory</a>.)</p>
 <h2 id="the-shape-of-a-shared-memory-layer" tabindex="-1">The shape of a shared memory layer <a class="anchor" href="#the-shape-of-a-shared-memory-layer" aria-hidden="true">#</a></h2>
 <p>Here’s how Munder Difflin implements semantic memory for a whole hive, via the <strong>MemPalace</strong> layer.
 It’s worth walking the moving parts because they show what “fast, shared recall” requires in practice.</p>
@@ -246,8 +247,9 @@ source of truth; the index is a recall accelerator built from it. That ordering 
 they work. Good memory hygiene — small, atomic, factual notes — makes recall sharp; rambling notes make
 it fuzzy.</p>
 <hr>
-<p>Munder Difflin gives every Claude Code agent markdown memory plus a shared semantic palace the whole
-hive can recall from — local, fast, and graceful when offline.
+<p>Munder Difflin gives every Claude Code agent markdown memory plus
+<a href="https://munderdiffl.in/#how">a shared semantic palace the whole hive can recall from</a> — local, fast,
+and graceful when offline.
 <a href="https://munderdiffl.in/#install">Download Munder Difflin</a> to give your agents memory that actually
 sticks; it’s free and open source.</p>
 
@@ -295,7 +297,7 @@ sticks; it’s free and open source.</p>
 
   <footer class="post-foot wrap"><div class="prevnext">
       <a class="pn prev" href="/blog/manage-multiple-claude-code-sessions/"><span class="k">← Older</span><span class="t">How to Manage Multiple Claude Code Sessions Like a Pro</span></a>
-      <a class="pn next" href="/blog/give-claude-code-long-term-memory/"><span class="k">Newer →</span><span class="t">How to Give Claude Code Long-Term Memory</span></a>
+      <a class="pn next" href="/blog/markdown-first-agent-memory/"><span class="k">Newer →</span><span class="t">Why We Built Agent Memory Markdown-First</span></a>
     </div>
     <section class="related">
       <h2>Related in Memory</h2>
@@ -315,6 +317,24 @@ sticks; it’s free and open source.</p>
     <div class="foot">
       <span class="tag kind">Memory</span>
       <a class="more" href="/blog/give-claude-code-long-term-memory/" aria-label="Read: How to Give Claude Code Long-Term Memory">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
+  <a class="thumb t-memory" href="/blog/markdown-first-agent-memory/" aria-hidden="true" tabindex="-1">
+    <span>MEMORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-05-27">May 27, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>5 min</span>
+    </div>
+    <h3><a href="/blog/markdown-first-agent-memory/">Why We Built Agent Memory Markdown-First</a></h3>
+    <p class="dek">Markdown-first AI agent long-term memory: plain notes a human can read and git can diff, with a semantic index on top that degrades gracefully.</p>
+    <div class="foot">
+      <span class="tag kind">Memory</span>
+      <a class="more" href="/blog/markdown-first-agent-memory/" aria-label="Read: Why We Built Agent Memory Markdown-First">Read →</a>
     </div>
   </div>
 </article>

@@ -216,9 +216,10 @@ addressed to the human (or flags it as needing human attention), and the harness
 <strong>approvals queue</strong> surfaced in the UI. You approve or reject — optionally with a note, like “yes, but
 cap it at $5” — and that note is relayed back to the agent that asked, as a message from the human.
 The agent picks up where it left off with your guidance in hand.</p>
-<p>Everything not on the critical list stays autonomous. This selective escalation is the entire reason a
-hive can run for a long stretch without babysitting: it interrupts you precisely when it should, and
-never otherwise. It’s also the model’s primary safety rail — the policy is the control surface, so you
+<p>Everything not on the critical list stays autonomous. This selective escalation —
+<a href="/blog/human-in-the-loop-ai-agents/">human-in-the-loop done right</a> — is the entire reason a hive can
+run for a long stretch without babysitting: it interrupts you precisely when it should, and never
+otherwise. It’s also the model’s primary safety rail — the policy is the control surface, so you
 tighten or loosen it by editing the prompt.</p>
 <h2 id="how-a-single-request-travels" tabindex="-1">How a single request travels <a class="anchor" href="#how-a-single-request-travels" aria-hidden="true">#</a></h2>
 <p>Putting the four jobs together, here’s the life of one instruction:</p>
@@ -256,7 +257,7 @@ off your plate.</p>
 room, naturally), with a reserved desk. It boots with the hive and runs alongside the workers as just
 another <code>claude</code> process — a special one.</p>
 <hr>
-<p>Munder Difflin’s GOD orchestrator routes, adjudicates, and escalates for a whole hive of Claude Code
+<p>Munder Difflin’s <a href="https://munderdiffl.in/#how">GOD orchestrator</a> routes, adjudicates, and escalates for a whole hive of Claude Code
 agents — on your own machine, with a full audit trail. <a href="https://munderdiffl.in/#install">Download Munder Difflin</a>
 to put one in charge of your floor; it’s free and open source.</p>
 
@@ -338,7 +339,7 @@ to put one in charge of your floor; it’s free and open source.</p>
       <span>5 min</span>
     </div>
     <h3><a href="/blog/human-in-the-loop-ai-agents/">Human-in-the-Loop AI Agents: Approvals That Don&#39;t Slow You Down</a></h3>
-    <p class="dek">Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope — and relays your answer back.</p>
+    <p class="dek">Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope changes.</p>
     <div class="foot">
       <span class="tag kind">Orchestration</span>
       <a class="more" href="/blog/human-in-the-loop-ai-agents/" aria-label="Read: Human-in-the-Loop AI Agents: Approvals That Don&#39;t Slow You Down">Read →</a>
