@@ -40,7 +40,7 @@ faq:
 
 <div class="callout tldr"><span class="ic">TL;DR</span><p><strong>Munder Difflin</strong> is a free,
 open-source (MIT), local-first desktop app that turns the Claude Code terminals you already run into a
-coordinated hive — shared memory, messaging, and a [GOD orchestrator](/#how) you talk to — on macOS,
+coordinated hive — shared memory, messaging, and a <a href="/#how">GOD orchestrator</a> you talk to — on macOS,
 Windows, and Linux. The full answers to the questions people ask most are below.</p></div>
 
 This page answers the questions we hear most about Munder Difflin, kept short and direct. If your

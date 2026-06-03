@@ -59,7 +59,7 @@ them a team.
   compounds instead of resetting.
 - **Messaging** — every agent has a mailbox; a router delivers between them, so they hand off work
   without me in the middle.
-- **A GOD orchestrator** — a coordinator you talk to like a manager; it decomposes your intent and
+- **A [GOD orchestrator](/#how)** — a coordinator you talk to like a manager; it decomposes your intent and
   routes the work.
 - **A floor you can watch** — agents as avatars at their desks, so the black box becomes something you
   can supervise at a glance.

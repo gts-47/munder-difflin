@@ -136,6 +136,14 @@
     <summary>A decision framework for choosing a multi-agent coding tool — memory, control, visibility, cost, local-first — with a simple scoring rubric you can run.</summary>
   </entry>
   <entry>
+    <title>Human-in-the-Loop AI Agents: Approvals That Don&#39;t Slow You Down</title>
+    <link href="https://munderdiffl.in/blog/human-in-the-loop-ai-agents/" />
+    <id>https://munderdiffl.in/blog/human-in-the-loop-ai-agents/</id>
+    <published>2026-06-02T00:00:00.000Z</published>
+    <updated>2026-06-02T00:00:00.000Z</updated><category term="Orchestration" />
+    <summary>Design human-in-the-loop AI agents that stay autonomous: an approvals queue that escalates only spend, destructive ops, and scope — and relays your answer back.</summary>
+  </entry>
+  <entry>
     <title>Munder Difflin FAQ: Everything People Ask</title>
     <link href="https://munderdiffl.in/blog/munder-difflin-faq/" />
     <id>https://munderdiffl.in/blog/munder-difflin-faq/</id>
@@ -182,6 +190,14 @@
     <published>2026-06-02T00:00:00.000Z</published>
     <updated>2026-06-02T00:00:00.000Z</updated><category term="Story" />
     <summary>The origin story of Munder Difflin — how the pain of juggling Claude Code terminals led to a coordinated, memory-backed hive of agents you can watch.</summary>
+  </entry>
+  <entry>
+    <title>An Append-Only Event Log for a Hive of Agents</title>
+    <link href="https://munderdiffl.in/blog/append-only-event-log-agents/" />
+    <id>https://munderdiffl.in/blog/append-only-event-log-agents/</id>
+    <published>2026-06-01T00:00:00.000Z</published>
+    <updated>2026-06-01T00:00:00.000Z</updated><category term="Internals" />
+    <summary>How an append-only event log makes a multi-agent system debuggable and replayable — what to record per event, and why one JSON line per event beats a database.</summary>
   </entry>
   <entry>
     <title>How to Run Multiple Claude Code Agents (Without Losing Track)</title>

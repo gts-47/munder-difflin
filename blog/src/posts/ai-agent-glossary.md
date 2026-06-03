@@ -23,7 +23,7 @@ faq:
 <div class="callout tldr"><span class="ic">TL;DR</span><p>The agent world is thick with jargon —
 <strong>harness</strong>, <strong>orchestrator</strong>, <strong>hive</strong>,
 <strong>subagent</strong>, <strong>agent memory</strong>. Here's each term in one quotable line, so
-you can read (and write) about [multi-agent AI](/blog/what-is-a-multi-agent-harness/) without
+you can read (and write) about <a href="/blog/what-is-a-multi-agent-harness/">multi-agent AI</a> without
 tripping. Bookmark it.</p></div>
 
 Every fast-moving field grows its own vocabulary, and AI coding agents have grown a lot of it fast.
