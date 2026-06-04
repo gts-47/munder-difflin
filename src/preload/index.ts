@@ -96,6 +96,16 @@ export interface GitCommit {
 export interface GitStatusEntry { path: string; index: string; worktree: string }
 export interface GitStatus { staged: GitStatusEntry[]; unstaged: GitStatusEntry[]; untracked: string[] }
 
+/** Real token usage + estimated USD cost summed from an agent's Claude Code
+ *  transcripts under ~/.claude/projects (Sonnet pricing). */
+export interface AgentUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  estimatedCostUsd: number;
+}
+
 const api = {
   version: '0.1.0',
 
@@ -219,7 +229,13 @@ const api = {
   // ─── Reset ─────────────────────────────────────────────────────────────────
   /** Wipe all hive data + the memory palace, reset config, and relaunch the app
    *  into onboarding. The process exits, so this promise never resolves. */
-  resetAll: (): Promise<void> => ipcRenderer.invoke('app:resetAll')
+  resetAll: (): Promise<void> => ipcRenderer.invoke('app:resetAll'),
+
+  // ─── Token telemetry (real usage + est. cost from CC transcripts) ──────────
+  /** Sum input/output/cache tokens + estimated USD cost for an agent from its
+   *  Claude Code transcripts. Returns null for an invalid cwd. */
+  agentUsage: (cwd: string): Promise<AgentUsage | null> =>
+    ipcRenderer.invoke('hive:agentUsage', cwd)
 };
 
 contextBridge.exposeInMainWorld('cth', api);
