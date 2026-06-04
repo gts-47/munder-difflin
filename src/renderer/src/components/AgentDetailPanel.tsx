@@ -10,6 +10,7 @@ import { CommandCenterPanel } from './CommandCenterPanel';
 import { disposeTerminal } from './terminalPool';
 import { SidebarTabs } from './SidebarTabs';
 import { FilesTab } from './FilesTab';
+import { ThreadsPanel } from './ThreadsPanel';
 import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
 import { usePtyParser } from '@/hooks/usePtyParser';
@@ -172,6 +173,10 @@ export function AgentDetailPanel({ agent }: AgentDetailPanelProps) {
 
         {sidebarTab === 'files' && (
           <FilesTab cwd={agent.cwd} />
+        )}
+
+        {sidebarTab === 'messages' && (
+          <ThreadsPanel agentId={agent.id} />
         )}
       </div>
     </PixelPanel>
