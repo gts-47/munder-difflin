@@ -271,7 +271,11 @@ const api = {
   // ─── Scheduled missions (recurring auto-dispatch) ──────────────────────────
   listMissions: (): Promise<ScheduledMission[]> => ipcRenderer.invoke('missions:list'),
   saveMissions: (missions: ScheduledMission[]): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('missions:save', missions)
+    ipcRenderer.invoke('missions:save', missions),
+
+  // ─── Full-text search across hive files (board, tasks, memory) ─────────────
+  textSearch: (q: string): Promise<{ ok: boolean; results: Array<{ source: string; excerpt: string }> }> =>
+    ipcRenderer.invoke('hive:textSearch', q)
 };
 
 contextBridge.exposeInMainWorld('cth', api);
