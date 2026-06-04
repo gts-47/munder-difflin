@@ -5,6 +5,7 @@ import { PixelButton } from './PixelButton';
 import { SpritePortrait } from './SpritePortrait';
 import { PtyTerminalView } from './PtyTerminalView';
 import { MessageQueueComposer } from './MessageQueueComposer';
+import { TasksKanban } from './TasksKanban';
 import { disposeTerminal } from './terminalPool';
 import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
@@ -16,11 +17,12 @@ import { buildSpawnCommand, AGENT_MODELS } from '@/store/config';
  *  per-agent model + dispatch + assistant access), a memory view, and a live
  *  activity feed / board / usage meter. */
 
-type CCTab = 'terminal' | 'floor' | 'memory' | 'activity' | 'handbook';
+type CCTab = 'terminal' | 'floor' | 'tasks' | 'memory' | 'activity' | 'handbook';
 
 const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { key: 'terminal', label: 'terminal', icon: 'terminal' },
   { key: 'floor', label: 'floor', icon: 'mcp' },
+  { key: 'tasks', label: 'tasks', icon: 'check' },
   { key: 'memory', label: 'memory', icon: 'sparkle' },
   { key: 'activity', label: 'activity', icon: 'bell' },
   { key: 'handbook', label: 'commands', icon: 'code' }
@@ -28,6 +30,10 @@ const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'
 
 export function CommandCenterPanel({ agent }: { agent: Agent }) {
   const [tab, setTab] = useState<CCTab>('terminal');
+  // A task-card "assign" pre-fills the Floor dispatch box and jumps to it. The
+  // counter bumps so re-assigning the same card re-seeds the textarea (the seed
+  // string alone wouldn't change). { seq } makes every assign distinct.
+  const [dispatchSeed, setDispatchSeed] = useState<{ text: string; seq: number }>({ text: '', seq: 0 });
   const updateAgent = useStore((s) => s.updateAgent);
   const setFullscreen = useStore((s) => s.setFullscreen);
   const fullscreenAgentId = useStore((s) => s.fullscreenAgentId);
@@ -113,7 +119,15 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
             <Centered>Michael has no live terminal.</Centered>
           )
         )}
-        {tab === 'floor' && <FloorTab />}
+        {tab === 'floor' && <FloorTab seed={dispatchSeed} />}
+        {tab === 'tasks' && (
+          <TasksKanban
+            onAssign={(prefill) => {
+              setDispatchSeed((s) => ({ text: prefill, seq: s.seq + 1 }));
+              setTab('floor');
+            }}
+          />
+        )}
         {tab === 'memory' && <MemoryTab godId={agent.id} />}
         {tab === 'activity' && <ActivityTab />}
         {tab === 'handbook' && <HandbookTab />}
@@ -124,7 +138,7 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
 
 // ─── Floor tab — roster, model, dispatch, dirs, assistant ────────────────────
 
-function FloorTab() {
+function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   const agents = useStore((s) => s.agents);
   const select = useStore((s) => s.select);
   const updateAgent = useStore((s) => s.updateAgent);
@@ -140,6 +154,12 @@ function FloorTab() {
   useEffect(() => {
     window.cth.getConfig().then((c) => setRepos(c.registeredRepos ?? [])).catch(() => { /* noop */ });
   }, []);
+
+  // Seed the dispatch box from a task-card "assign" (keyed on seq so repeat
+  // assigns re-prefill). seq === 0 is the untouched initial state — skip it.
+  useEffect(() => {
+    if (seed.seq > 0) setDispatchText(seed.text);
+  }, [seed.seq, seed.text]);
 
   const restartWithModel = async (a: Agent, model: string | undefined) => {
     if (!a.ptyId) return;
