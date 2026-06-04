@@ -8,6 +8,14 @@
   <id>https://munderdiffl.in/blog/</id>
   <author><name>Chaitanya Giri</name><uri>https://munderdiffl.in</uri></author>
   <entry>
+    <title>Generative Engine Optimization: The Techniques the Research Backs</title>
+    <link href="https://munderdiffl.in/blog/generative-engine-optimization-techniques/" />
+    <id>https://munderdiffl.in/blog/generative-engine-optimization-techniques/</id>
+    <published>2026-06-05T00:00:00.000Z</published>
+    <updated>2026-06-05T00:00:00.000Z</updated><category term="Concepts" />
+    <summary>What the first peer-reviewed GEO study found works to get content cited by AI — statistics, source citations, quotes — and why keyword stuffing backfires.</summary>
+  </entry>
+  <entry>
     <title>How to Install and Use Munder Difflin</title>
     <link href="https://munderdiffl.in/blog/how-to-install-and-use-munder-difflin/" />
     <id>https://munderdiffl.in/blog/how-to-install-and-use-munder-difflin/</id>
@@ -478,13 +486,5 @@
     <published>2026-06-02T00:00:00.000Z</published>
     <updated>2026-06-02T00:00:00.000Z</updated><category term="Story" />
     <summary>The origin story of Munder Difflin — how the pain of juggling Claude Code terminals led to a coordinated, memory-backed hive of agents you can watch.</summary>
-  </entry>
-  <entry>
-    <title>An Append-Only Event Log for a Hive of Agents</title>
-    <link href="https://munderdiffl.in/blog/append-only-event-log-agents/" />
-    <id>https://munderdiffl.in/blog/append-only-event-log-agents/</id>
-    <published>2026-06-01T00:00:00.000Z</published>
-    <updated>2026-06-01T00:00:00.000Z</updated><category term="Internals" />
-    <summary>How an append-only event log makes a multi-agent system debuggable and replayable: what to record, and why one JSON line per event beats a database.</summary>
   </entry>
 </feed>
