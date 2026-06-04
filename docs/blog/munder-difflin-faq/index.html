@@ -82,14 +82,16 @@
     { "@type": "Question", "name": "Is Munder Difflin free?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Munder Difflin is free and open source under the MIT license. You can download a build or run it from source — there's no paid tier to unlock the core." } },
     { "@type": "Question", "name": "Does it run my data or code in the cloud?", "acceptedAnswer": { "@type": "Answer", "text": "No. Munder Difflin is local-first — the harness, agents, and memory all live on your own machine. Your Claude Code sessions talk to Anthropic the same way they already do; Munder Difflin itself doesn't ship your code anywhere." } },
     { "@type": "Question", "name": "What platforms does Munder Difflin support?", "acceptedAnswer": { "@type": "Answer", "text": "macOS, Windows, and Linux. You can download a build or build it from source in a couple of commands." } },
-    { "@type": "Question", "name": "How is this different from running several Claude Code terminals myself?", "acceptedAnswer": { "@type": "Answer", "text": "Munder Difflin adds the coordination that loose terminals lack: shared long-term memory (MemPalace), inter-agent messaging, a GOD orchestrator that routes work, and a visual office floor — so the sessions act as one team instead of isolated windows that collide and forget." } },
+    { "@type": "Question", "name": "How is this different from running several Claude Code terminals myself?", "acceptedAnswer": { "@type": "Answer", "text": "Munder Difflin adds the coordination that loose terminals lack: shared long-term memory (MemPalace), inter-agent messaging, a GOD orchestrator that routes work, and a visual office floor — so the sessions act as one team instead of isolated windows that collide and forget, plus a task kanban board, scheduled recurring missions, real spend telemetry, GitHub issue ingestion, CI status watching, and desktop notifications — a full coordination layer rather than just a pretty face." } },
     { "@type": "Question", "name": "Do I need to know how to code to use it?", "acceptedAnswer": { "@type": "Answer", "text": "You should be comfortable with Claude Code and a terminal, since Munder Difflin coordinates Claude Code agents. But you steer the team in plain language by talking to the GOD orchestrator — you don't script the coordination yourself." } },
     { "@type": "Question", "name": "What is MemPalace?", "acceptedAnswer": { "@type": "Answer", "text": "MemPalace is Munder Difflin's shared memory layer — a semantic store the whole hive reads and writes, mined automatically from each agent's plain-markdown notes, so agents recall relevant knowledge across sessions." } },
     { "@type": "Question", "name": "What is the GOD orchestrator?", "acceptedAnswer": { "@type": "Answer", "text": "The GOD orchestrator is a coordinating agent you talk to in plain language. It decomposes your intent, routes work to the right agents, adjudicates routine decisions, and escalates only the genuinely critical ones to you." } },
     { "@type": "Question", "name": "Can the agents talk to each other?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Each agent has a mailbox and a router delivers messages between them, so one agent can hand work or findings to another directly — without you relaying it." } },
     { "@type": "Question", "name": "Does Munder Difflin work with my existing Claude Code setup, MCP servers, and skills?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. It coordinates the Claude Code you already run, including your tools, MCP servers, and skills — it adds a coordination layer rather than replacing your setup." } },
     { "@type": "Question", "name": "Is Munder Difflin affiliated with Dunder Mifflin or The Office?", "acceptedAnswer": { "@type": "Answer", "text": "No. The name is an affectionate parody — 'the world's best agents, the world's worst paper company.' It's an independent open-source project, not affiliated with NBC or The Office." } },
-    { "@type": "Question", "name": "Where do I download Munder Difflin?", "acceptedAnswer": { "@type": "Answer", "text": "From the install section on munderdiffl.in, which links to the latest release. It's free, open source, and available for macOS, Windows, and Linux." } }
+    { "@type": "Question", "name": "Where do I download Munder Difflin?", "acceptedAnswer": { "@type": "Answer", "text": "From the install section on munderdiffl.in, which links to the latest release. It's free, open source, and available for macOS, Windows, and Linux." } },
+    { "@type": "Question", "name": "Does Munder Difflin show how much each agent is costing me?", "acceptedAnswer": { "@type": "Answer", "text": "Yes, as of v0.2.0. The Activity tab in Michael's Command Center reads your local Claude Code transcript files and surfaces real token counts (input, output, cache) and estimated USD cost per agent. No external service — it reads the same files Claude Code already writes to your machine." } },
+    { "@type": "Question", "name": "Can agents work in parallel on the same repo without colliding?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. The Git isolation toggle in Add Agent auto-provisions a dedicated git worktree for each agent on spawn and tears it down on kill. Agents on the same repo work on separate branches, so there are no branch-switch collisions." } }
     
   ]
 }
@@ -193,7 +195,7 @@ free, open source, and local-first.</p>
         
         <div class="qa">
           <p class="q">How is this different from running several Claude Code terminals myself?</p>
-          <p class="a">Munder Difflin adds the coordination that loose terminals lack: shared long-term memory (MemPalace), inter-agent messaging, a GOD orchestrator that routes work, and a visual office floor — so the sessions act as one team instead of isolated windows that collide and forget.</p>
+          <p class="a">Munder Difflin adds the coordination that loose terminals lack: shared long-term memory (MemPalace), inter-agent messaging, a GOD orchestrator that routes work, and a visual office floor — so the sessions act as one team instead of isolated windows that collide and forget, plus a task kanban board, scheduled recurring missions, real spend telemetry, GitHub issue ingestion, CI status watching, and desktop notifications — a full coordination layer rather than just a pretty face.</p>
         </div>
         
         <div class="qa">
@@ -229,6 +231,16 @@ free, open source, and local-first.</p>
         <div class="qa">
           <p class="q">Where do I download Munder Difflin?</p>
           <p class="a">From the install section on munderdiffl.in, which links to the latest release. It&#39;s free, open source, and available for macOS, Windows, and Linux.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Does Munder Difflin show how much each agent is costing me?</p>
+          <p class="a">Yes, as of v0.2.0. The Activity tab in Michael&#39;s Command Center reads your local Claude Code transcript files and surfaces real token counts (input, output, cache) and estimated USD cost per agent. No external service — it reads the same files Claude Code already writes to your machine.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Can agents work in parallel on the same repo without colliding?</p>
+          <p class="a">Yes. The Git isolation toggle in Add Agent auto-provisions a dedicated git worktree for each agent on spawn and tears it down on kill. Agents on the same repo work on separate branches, so there are no branch-switch collisions.</p>
         </div>
         
       </section>

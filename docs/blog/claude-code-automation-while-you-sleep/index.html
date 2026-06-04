@@ -125,7 +125,7 @@
       <span class="dot" aria-hidden="true">·</span>
       <time datetime="2026-06-04">Jun 4, 2026</time>
       <span class="dot" aria-hidden="true">·</span>
-      <span>5 min read</span>
+      <span>6 min read</span>
       <span class="tag kind">Guides</span>
     </div>
   </header>
@@ -178,6 +178,11 @@ so each task is surfaced exactly once. The full mechanics are in
 continues only while it has tasks; when the work runs out, it stops cleanly instead of spinning or
 inventing busywork. You’re not setting a duration — you’re filling a queue and letting the team drain
 it.</p>
+<p>v0.2.0 adds <strong>scheduled missions</strong> — the harness itself dispatches recurring directives to any agent on
+a timer you set. A 30-minute floor-check mission pointing at Michael (body: ‘Are all agents making
+progress? Re-engage anyone idle.’) turns the orchestrator into a self-healing system: even if the floor
+goes quiet, Michael wakes up, reads the hive state, and re-engages stuck agents without you touching
+anything.</p>
 <h2 id="ingredient-3-guardrails-the-part-that-makes-it-safe" tabindex="-1">Ingredient 3 — Guardrails (the part that makes it safe) <a class="anchor" href="#ingredient-3-guardrails-the-part-that-makes-it-safe" aria-hidden="true">#</a></h2>
 <p>This is where most “let it run overnight” experiments go wrong. Autonomy is easy; <em>bounded</em> autonomy is
 the work. Four guardrails turn an unattended run from reckless to routine.</p>

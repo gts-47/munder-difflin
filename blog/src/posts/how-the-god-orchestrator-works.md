@@ -162,6 +162,15 @@ If you want the design rationale behind these choices,
 [the best way to coordinate AI coding agents](/blog/coordinating-ai-coding-agents/) lays out the
 single-writer and single-committer principles the orchestrator depends on.
 
+## The orchestrator's interface
+
+In v0.2.0, Michael's interface expands significantly. His sidebar becomes a full Command Center: a
+Tasks tab gives him a kanban board to track work across agents with dependency links; a Schedules tab
+lets you pre-program recurring directives so the floor stays active between your check-ins; an Activity
+tab shows real token and dollar cost per agent drawn from transcript files; and a GitHub Issues section
+in the Floor tab lets him receive and route repo issues directly. The orchestrator is the same agent —
+the harness simply gives him better tools.
+
 ## FAQ
 
 **Can I run without an orchestrator?** You can run agents without one, but then you're the

@@ -21,7 +21,7 @@ faq:
   - q: "What platforms does Munder Difflin support?"
     a: "macOS, Windows, and Linux. You can download a build or build it from source in a couple of commands."
   - q: "How is this different from running several Claude Code terminals myself?"
-    a: "Munder Difflin adds the coordination that loose terminals lack: shared long-term memory (MemPalace), inter-agent messaging, a GOD orchestrator that routes work, and a visual office floor — so the sessions act as one team instead of isolated windows that collide and forget."
+    a: "Munder Difflin adds the coordination that loose terminals lack: shared long-term memory (MemPalace), inter-agent messaging, a GOD orchestrator that routes work, and a visual office floor — so the sessions act as one team instead of isolated windows that collide and forget, plus a task kanban board, scheduled recurring missions, real spend telemetry, GitHub issue ingestion, CI status watching, and desktop notifications — a full coordination layer rather than just a pretty face."
   - q: "Do I need to know how to code to use it?"
     a: "You should be comfortable with Claude Code and a terminal, since Munder Difflin coordinates Claude Code agents. But you steer the team in plain language by talking to the GOD orchestrator — you don't script the coordination yourself."
   - q: "What is MemPalace?"
@@ -36,6 +36,10 @@ faq:
     a: "No. The name is an affectionate parody — 'the world's best agents, the world's worst paper company.' It's an independent open-source project, not affiliated with NBC or The Office."
   - q: "Where do I download Munder Difflin?"
     a: "From the install section on munderdiffl.in, which links to the latest release. It's free, open source, and available for macOS, Windows, and Linux."
+  - q: "Does Munder Difflin show how much each agent is costing me?"
+    a: "Yes, as of v0.2.0. The Activity tab in Michael's Command Center reads your local Claude Code transcript files and surfaces real token counts (input, output, cache) and estimated USD cost per agent. No external service — it reads the same files Claude Code already writes to your machine."
+  - q: "Can agents work in parallel on the same repo without colliding?"
+    a: "Yes. The Git isolation toggle in Add Agent auto-provisions a dedicated git worktree for each agent on spawn and tears it down on kill. Agents on the same repo work on separate branches, so there are no branch-switch collisions."
 ---
 
 <div class="callout tldr"><span class="ic">TL;DR</span><p><strong>Munder Difflin</strong> is a free,

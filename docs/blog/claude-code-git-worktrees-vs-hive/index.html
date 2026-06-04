@@ -80,7 +80,7 @@
   "mainEntity": [
     { "@type": "Question", "name": "What is a git worktree?", "acceptedAnswer": { "@type": "Answer", "text": "A git worktree is an additional working directory attached to one repository. Each worktree has its own checked-out branch and its own index, but they share the same object store and refs — so you can have several branches checked out at once without cloning the repo multiple times." } },
     { "@type": "Question", "name": "Are git worktrees enough to run parallel Claude Code agents?", "acceptedAnswer": { "@type": "Answer", "text": "For independent tasks on separate branches, often yes — worktrees give each agent its own files so they don't collide. What worktrees don't provide is coordination: shared memory, messaging between agents, or an orchestrator that divides one goal across the team." } },
-    { "@type": "Question", "name": "Can I use worktrees and a hive together?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Worktrees solve workspace isolation; a hive solves coordination. You can run a coordinated hive where each agent works in its own worktree, getting both isolation and shared memory plus messaging." } }
+    { "@type": "Question", "name": "Can I use worktrees and a hive together?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Worktrees solve workspace isolation; a hive solves coordination. You can run a coordinated hive where each agent works in its own worktree, getting both isolation and shared memory plus messaging. In Munder Difflin v0.2.0 this is built-in — the Git isolation toggle in Add Agent handles it automatically." } }
     
   ]
 }
@@ -197,9 +197,10 @@ directory, you need a discipline (single-writer files, single-committer git) to 
 colliding. Which is exactly where worktrees come back in.</p>
 <h2 id="they-compose" tabindex="-1">They compose <a class="anchor" href="#they-compose" aria-hidden="true">#</a></h2>
 <p>Here’s the punchline the “vs.” framing hides: <strong>use both.</strong> Worktrees handle isolation; the hive
-handles coordination. Run a hive whose agents each operate in their own worktree, and you get the best
-of both — agents that can’t clobber each other’s files <em>and</em> can share memory, message each other, and
-take direction from an orchestrator.</p>
+handles coordination. Munder Difflin now ships this combination built-in: the <strong>Git isolation</strong> toggle
+in Add Agent provisions a dedicated worktree for each agent on spawn and tears it down on kill — so
+every agent in a shared repo works on its own branch by default, with no manual <code>git worktree add</code>
+needed.</p>
 <pre class="language-text"><code class="language-text">            ┌─ worktree: agent-a (branch agent-a) ─┐
 hive ───────┼─ worktree: agent-b (branch agent-b) ─┼── shared memory + messaging
 (coordination) └─ worktree: agent-c (branch agent-c) ┘   + orchestrator + board</code></pre>
@@ -257,7 +258,7 @@ team; it’s free and open source.</p>
         
         <div class="qa">
           <p class="q">Can I use worktrees and a hive together?</p>
-          <p class="a">Yes. Worktrees solve workspace isolation; a hive solves coordination. You can run a coordinated hive where each agent works in its own worktree, getting both isolation and shared memory plus messaging.</p>
+          <p class="a">Yes. Worktrees solve workspace isolation; a hive solves coordination. You can run a coordinated hive where each agent works in its own worktree, getting both isolation and shared memory plus messaging. In Munder Difflin v0.2.0 this is built-in — the Git isolation toggle in Add Agent handles it automatically.</p>
         </div>
         
       </section>
@@ -315,7 +316,7 @@ team; it’s free and open source.</p>
     <div class="meta">
       <time datetime="2026-05-30">May 30, 2026</time>
       <span class="dot" aria-hidden="true"></span>
-      <span>6 min</span>
+      <span>7 min</span>
     </div>
     <h3><a href="/blog/how-the-god-orchestrator-works/">Inside the GOD Orchestrator: Routing, Adjudication, Escalation</a></h3>
     <p class="dek">A deep dive into the Claude Code orchestrator: how a GOD agent reads requests, routes work, adjudicates routine traffic, and escalates the critical few.</p>

@@ -125,7 +125,7 @@
       <span class="dot" aria-hidden="true">·</span>
       <time datetime="2026-05-30">May 30, 2026</time>
       <span class="dot" aria-hidden="true">·</span>
-      <span>6 min read</span>
+      <span>7 min read</span>
       <span class="tag kind">Orchestration</span>
     </div>
   </header>
@@ -249,6 +249,13 @@ routes to the human rather than guessing. The default is “ask,” not “act.�
 <p>If you want the design rationale behind these choices,
 <a href="/blog/coordinating-ai-coding-agents/">the best way to coordinate AI coding agents</a> lays out the
 single-writer and single-committer principles the orchestrator depends on.</p>
+<h2 id="the-orchestrators-interface" tabindex="-1">The orchestrator’s interface <a class="anchor" href="#the-orchestrators-interface" aria-hidden="true">#</a></h2>
+<p>In v0.2.0, Michael’s interface expands significantly. His sidebar becomes a full Command Center: a
+Tasks tab gives him a kanban board to track work across agents with dependency links; a Schedules tab
+lets you pre-program recurring directives so the floor stays active between your check-ins; an Activity
+tab shows real token and dollar cost per agent drawn from transcript files; and a GitHub Issues section
+in the Floor tab lets him receive and route repo issues directly. The orchestrator is the same agent —
+the harness simply gives him better tools.</p>
 <h2 id="faq" tabindex="-1">FAQ <a class="anchor" href="#faq" aria-hidden="true">#</a></h2>
 <p><strong>Can I run without an orchestrator?</strong> You can run agents without one, but then you’re the
 orchestrator — assigning work and relaying messages by hand. The GOD agent exists to take that role
@@ -297,7 +304,7 @@ to put one in charge of your floor; it’s free and open source.</p>
     <aside class="toc-rail" aria-label="Table of contents">
       <div class="tt">On this page</div>
       <ol>
-        <li class="lvl-2"><a href="#intelligence-vs-mechanism">Intelligence vs. mechanism</a></li><li class="lvl-2"><a href="#job-1-keep-the-roster">Job 1 — Keep the roster</a></li><li class="lvl-2"><a href="#job-2-route-work">Job 2 — Route work</a></li><li class="lvl-2"><a href="#job-3-adjudicate-the-routine-traffic">Job 3 — Adjudicate the routine traffic</a></li><li class="lvl-2"><a href="#job-4-escalate-the-critical-few">Job 4 — Escalate the critical few</a></li><li class="lvl-2"><a href="#how-a-single-request-travels">How a single request travels</a></li><li class="lvl-2"><a href="#what-makes-it-robust">What makes it robust</a></li><li class="lvl-2"><a href="#faq">FAQ</a></li>
+        <li class="lvl-2"><a href="#intelligence-vs-mechanism">Intelligence vs. mechanism</a></li><li class="lvl-2"><a href="#job-1-keep-the-roster">Job 1 — Keep the roster</a></li><li class="lvl-2"><a href="#job-2-route-work">Job 2 — Route work</a></li><li class="lvl-2"><a href="#job-3-adjudicate-the-routine-traffic">Job 3 — Adjudicate the routine traffic</a></li><li class="lvl-2"><a href="#job-4-escalate-the-critical-few">Job 4 — Escalate the critical few</a></li><li class="lvl-2"><a href="#how-a-single-request-travels">How a single request travels</a></li><li class="lvl-2"><a href="#what-makes-it-robust">What makes it robust</a></li><li class="lvl-2"><a href="#the-orchestrators-interface">The orchestrator’s interface</a></li><li class="lvl-2"><a href="#faq">FAQ</a></li>
       </ol>
     </aside>
     

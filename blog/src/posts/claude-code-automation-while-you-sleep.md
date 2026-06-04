@@ -78,6 +78,12 @@ continues only while it has tasks; when the work runs out, it stops cleanly inst
 inventing busywork. You're not setting a duration — you're filling a queue and letting the team drain
 it.
 
+v0.2.0 adds **scheduled missions** — the harness itself dispatches recurring directives to any agent on
+a timer you set. A 30-minute floor-check mission pointing at Michael (body: 'Are all agents making
+progress? Re-engage anyone idle.') turns the orchestrator into a self-healing system: even if the floor
+goes quiet, Michael wakes up, reads the hive state, and re-engages stuck agents without you touching
+anything.
+
 ## Ingredient 3 — Guardrails (the part that makes it safe)
 
 This is where most "let it run overnight" experiments go wrong. Autonomy is easy; *bounded* autonomy is

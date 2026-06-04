@@ -17,7 +17,7 @@ faq:
   - q: "Are git worktrees enough to run parallel Claude Code agents?"
     a: "For independent tasks on separate branches, often yes — worktrees give each agent its own files so they don't collide. What worktrees don't provide is coordination: shared memory, messaging between agents, or an orchestrator that divides one goal across the team."
   - q: "Can I use worktrees and a hive together?"
-    a: "Yes. Worktrees solve workspace isolation; a hive solves coordination. You can run a coordinated hive where each agent works in its own worktree, getting both isolation and shared memory plus messaging."
+    a: "Yes. Worktrees solve workspace isolation; a hive solves coordination. You can run a coordinated hive where each agent works in its own worktree, getting both isolation and shared memory plus messaging. In Munder Difflin v0.2.0 this is built-in — the Git isolation toggle in Add Agent handles it automatically."
 ---
 
 <div class="callout tldr"><span class="ic">TL;DR</span><p><strong>Git worktrees</strong> give each
@@ -98,9 +98,10 @@ colliding. Which is exactly where worktrees come back in.
 ## They compose
 
 Here's the punchline the "vs." framing hides: **use both.** Worktrees handle isolation; the hive
-handles coordination. Run a hive whose agents each operate in their own worktree, and you get the best
-of both — agents that can't clobber each other's files *and* can share memory, message each other, and
-take direction from an orchestrator.
+handles coordination. Munder Difflin now ships this combination built-in: the **Git isolation** toggle
+in Add Agent provisions a dedicated worktree for each agent on spawn and tears it down on kill — so
+every agent in a shared repo works on its own branch by default, with no manual `git worktree add`
+needed.
 
 ```text
             ┌─ worktree: agent-a (branch agent-a) ─┐
