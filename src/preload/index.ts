@@ -106,6 +106,14 @@ export interface GHIssue {
   assignees: string[];
 }
 
+/** A CI (GitHub Actions) workflow run, normalized for the renderer. */
+export interface CIRun {
+  name: string;
+  status: string;
+  conclusion: string | null;
+  url: string;
+}
+
 const api = {
   version: '0.1.0',
 
@@ -235,7 +243,14 @@ const api = {
   /** List up to 30 open issues in the repo at `cwd` via the `gh` CLI. Returns
    *  `{ ok: false, error }` if `gh` is missing/unauthenticated or `cwd` isn't a repo. */
   githubIssues: (cwd: string): Promise<{ ok: boolean; issues?: GHIssue[]; error?: string }> =>
-    ipcRenderer.invoke('github:issues', cwd)
+    ipcRenderer.invoke('github:issues', cwd),
+
+  // ─── GitHub CI status watcher (gh CLI) ─────────────────────────────────────
+  /** List up to 5 recent CI (GitHub Actions) runs in the repo at `cwd` via the
+   *  `gh` CLI. Returns `{ ok: false, error }` if `gh` is missing/unauthenticated,
+   *  `cwd` isn't a repo, or the repo has no Actions. */
+  githubCIRuns: (cwd: string): Promise<{ ok: boolean; runs?: CIRun[]; error?: string }> =>
+    ipcRenderer.invoke('github:ciRuns', cwd)
 };
 
 contextBridge.exposeInMainWorld('cth', api);

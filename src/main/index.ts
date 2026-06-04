@@ -15,7 +15,7 @@ import { HiveManager, type AgentMeta, type HiveMessage } from './hive';
 import { HookServer } from './hooks';
 import { MemoryManager } from './memory';
 import { enrichMessage } from './assistant';
-import { listIssues } from './github';
+import { listIssues, listCIRuns } from './github';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const ptyManager = new PtyManager();
@@ -306,6 +306,11 @@ ipcMain.handle('app:resetAll', () => {
 // ─── IPC: GitHub issue ingestion (gh CLI) ────────────────────────────────────
 ipcMain.handle('github:issues', (_evt, cwd: unknown) =>
   typeof cwd === 'string' ? listIssues(cwd) : { ok: false, error: 'no cwd' }
+);
+
+// ─── IPC: GitHub CI status watcher (gh CLI) ──────────────────────────────────
+ipcMain.handle('github:ciRuns', (_evt, cwd: unknown) =>
+  typeof cwd === 'string' ? listCIRuns(cwd) : { ok: false, error: 'no cwd' }
 );
 
 app.whenReady().then(() => {
