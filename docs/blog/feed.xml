@@ -32,6 +32,14 @@
     <summary>An honest 2026 roundup of tools to run multiple Claude Code agents — Claude Squad, Conductor, Crystal, vibe-kanban, and Munder Difflin — compared.</summary>
   </entry>
   <entry>
+    <title>Can Claude Code Agents Talk to Each Other?</title>
+    <link href="https://munderdiffl.in/blog/can-claude-code-agents-talk-to-each-other/" />
+    <id>https://munderdiffl.in/blog/can-claude-code-agents-talk-to-each-other/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Concepts" />
+    <summary>Can Claude Code agents talk to each other? By default they report to their launcher — but a small coordination layer lets them message peer-to-peer.</summary>
+  </entry>
+  <entry>
     <title>Claude Code Automation: Let Agents Build While You Sleep</title>
     <link href="https://munderdiffl.in/blog/claude-code-automation-while-you-sleep/" />
     <id>https://munderdiffl.in/blog/claude-code-automation-while-you-sleep/</id>
@@ -64,12 +72,68 @@
     <summary>Claude Squad vs Munder Difflin: a lean terminal session manager against a memory-backed, orchestrated, visual hive. Feature table and an honest verdict.</summary>
   </entry>
   <entry>
+    <title>Context Engineering for AI Agents: Budgeting the Window</title>
+    <link href="https://munderdiffl.in/blog/context-engineering-for-ai-agents/" />
+    <id>https://munderdiffl.in/blog/context-engineering-for-ai-agents/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Guides" />
+    <summary>Why context engineering beats prompt wording for agents — and the tactics (isolation, retrieval, externalized state, compaction) that keep the window lean.</summary>
+  </entry>
+  <entry>
     <title>How to Debug a Multi-Agent System</title>
     <link href="https://munderdiffl.in/blog/debugging-multi-agent-systems/" />
     <id>https://munderdiffl.in/blog/debugging-multi-agent-systems/</id>
     <published>2026-06-04T00:00:00.000Z</published>
     <updated>2026-06-04T00:00:00.000Z</updated><category term="Guides" />
     <summary>How to debug a multi-agent system: use the event log, per-agent terminals, message trails, and git history to find why a hive of AI agents went sideways.</summary>
+  </entry>
+  <entry>
+    <title>Do More With Less: Smart Model Routing Across Agents</title>
+    <link href="https://munderdiffl.in/blog/do-more-with-less-model-routing/" />
+    <id>https://munderdiffl.in/blog/do-more-with-less-model-routing/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Concepts" />
+    <summary>Why a hive of agents shouldn&#39;t all run the biggest model — and how routing the right task to the right model cuts cost and latency without losing quality.</summary>
+  </entry>
+  <entry>
+    <title>How AI Agents Remember: Semantic Memory in a Hive</title>
+    <link href="https://munderdiffl.in/blog/how-agents-remember-semantic-memory/" />
+    <id>https://munderdiffl.in/blog/how-agents-remember-semantic-memory/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Memory" />
+    <summary>A code-grounded guide to how AI agents remember — the MemPalace mine loop, per-agent wings, and wake-up digest that give a Claude Code hive shared recall.</summary>
+  </entry>
+  <entry>
+    <title>Keep Your Agent&#39;s Semantic Memory Clean: Don&#39;t Index the Config</title>
+    <link href="https://munderdiffl.in/blog/keep-agent-semantic-memory-clean/" />
+    <id>https://munderdiffl.in/blog/keep-agent-semantic-memory-clean/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Memory" />
+    <summary>A semantic memory layer is only as good as what you feed it — how an agent&#39;s recall got swamped by config and logs, and the .gitignore + prune fix.</summary>
+  </entry>
+  <entry>
+    <title>Make a Hive Work While You Sleep: Scheduling Autonomous Agent Missions</title>
+    <link href="https://munderdiffl.in/blog/scheduling-autonomous-agent-missions/" />
+    <id>https://munderdiffl.in/blog/scheduling-autonomous-agent-missions/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Orchestration" />
+    <summary>How scheduled missions make a Claude Code hive work on a cadence — recurring requests that fire on an interval and land in an agent&#39;s queue, hands-free.</summary>
+  </entry>
+  <entry>
+    <title>AEO for Dev Tools: Getting Cited by ChatGPT and Claude</title>
+    <link href="https://munderdiffl.in/blog/what-is-aeo-for-dev-tools/" />
+    <id>https://munderdiffl.in/blog/what-is-aeo-for-dev-tools/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Concepts" />
+    <summary>Answer Engine Optimization for dev tools: how to get cited by ChatGPT, Claude, and Perplexity with the right robots.txt, JSON-LD, and writing patterns.</summary>
+  </entry>
+  <entry>
+    <title>What&#39;s New in Agentic AI: A June 2026 Field Guide</title>
+    <link href="https://munderdiffl.in/blog/whats-new-in-agentic-ai-june-2026/" />
+    <id>https://munderdiffl.in/blog/whats-new-in-agentic-ai-june-2026/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Guides" />
+    <summary>A grounded June 2026 roundup of agentic AI: Claude Opus 4.8, the MCP and A2A protocol layer, usage-based agent billing, and agent governance.</summary>
   </entry>
   <entry>
     <title>Building a Terminal UI with xterm.js and node-pty</title>

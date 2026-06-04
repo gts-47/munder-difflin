@@ -36,6 +36,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://munderdiffl.in/blog/can-claude-code-agents-talk-to-each-other/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://munderdiffl.in/blog/claude-code-automation-while-you-sleep/</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>monthly</changefreq>
@@ -60,7 +66,49 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://munderdiffl.in/blog/context-engineering-for-ai-agents/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://munderdiffl.in/blog/debugging-multi-agent-systems/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://munderdiffl.in/blog/do-more-with-less-model-routing/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://munderdiffl.in/blog/how-agents-remember-semantic-memory/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://munderdiffl.in/blog/keep-agent-semantic-memory-clean/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://munderdiffl.in/blog/scheduling-autonomous-agent-missions/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://munderdiffl.in/blog/what-is-aeo-for-dev-tools/</loc>
+    <lastmod>2026-06-04</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://munderdiffl.in/blog/whats-new-in-agentic-ai-june-2026/</loc>
     <lastmod>2026-06-04</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -269,26 +317,26 @@
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
-  <url><loc>https://munderdiffl.in/blog/topics/internals/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/topics/guides/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://munderdiffl.in/blog/topics/internals/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/topics/comparisons/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
-  <url><loc>https://munderdiffl.in/blog/topics/orchestration/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/topics/concepts/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://munderdiffl.in/blog/topics/orchestration/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/topics/memory/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/topics/use-cases/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/topics/story/</loc><changefreq>weekly</changefreq><priority>0.5</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/multi-agent/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/claude-code/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/internals/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://munderdiffl.in/blog/tags/guides/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/orchestration/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/guides/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/comparisons/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/tools/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/getting-started/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://munderdiffl.in/blog/tags/concepts/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/memory/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://munderdiffl.in/blog/tags/automation/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/concepts/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/mempalace/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/automation/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/observability/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/use-cases/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/terminals/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
@@ -300,6 +348,7 @@
   <url><loc>https://munderdiffl.in/blog/tags/pixijs/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/visualization/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/xtermjs/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/autonomous/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/subagents/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/markdown/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/coordination/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
@@ -320,7 +369,16 @@
   <url><loc>https://munderdiffl.in/blog/tags/node-pty/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/performance/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/architecture/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://munderdiffl.in/blog/tags/autonomous/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/context-engineering/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/debugging/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/model-routing/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/cost/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/hive/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/aeo/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/seo/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/devrel/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/agentic-ai/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/industry/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://munderdiffl.in/blog/tags/protocols/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
   <url><loc>https://munderdiffl.in/blog/tags/tutorial/</loc><changefreq>weekly</changefreq><priority>0.3</priority></url>
 </urlset>
