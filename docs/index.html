@@ -93,6 +93,8 @@
     --tan:      #F1E6CC;
     --rose:     #FBE0DF;
     --sky-soft: #DCEFF7;
+    --lemon:    #FBF1C2;
+    --coral:    #FBD7CD;
     /* neo-brutalist depth — hard offset shadows, no blur */
     --shadow-card:    10px 10px 0 var(--ink);
     --shadow-card-sm:  6px 6px 0 var(--ink);
@@ -288,6 +290,17 @@
   .card.t-lilac { background: var(--lilac); }
   .card.t-peach { background: var(--peach); }
   .card.t-mint  { background: var(--mint); }
+  .card.t-sky   { background: var(--sky-soft); }
+  .card.t-lemon { background: var(--lemon); }
+  .card.t-coral { background: var(--coral); }
+
+  /* ---------- claude: function grid ---------- */
+  .fn-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:32px 0; }
+  .fn-card { background:#fff; border:2px solid var(--ink); padding:14px 12px 12px; display:flex; flex-direction:column; gap:4px; box-shadow:3px 3px 0 var(--ink); }
+  .fn-card .fn-ic { font-size:22px; line-height:1; margin-bottom:2px; }
+  .fn-card .fn-label { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:700; color:var(--ink); }
+  .fn-card .fn-ex { font-size:12px; color:#57544C; line-height:1.4; }
+  @media(max-width:640px){ .fn-grid { grid-template-columns:repeat(2,1fr); } }
 
   /* ---------- how (cubicle-style feature cards) ---------- */
   .how-head { max-width: 720px; }
@@ -581,6 +594,26 @@
         <h3>High-agency outcomes</h3>
         <p>Agents run autonomously for hours, even days — reiterating on an ambitious project until it's actually done, not just attempted.</p>
       </div>
+      <div class="card t-sky reveal">
+        <div class="ic">📋</div>
+        <h3>Task board, built in</h3>
+        <p>A full dependency-aware kanban lives inside the Command Center — assign tasks to agents, track status across todo/doing/blocked/done, and wire dependencies so nothing starts before its upstream is ready.</p>
+      </div>
+      <div class="card t-lemon reveal">
+        <div class="ic">⏰</div>
+        <h3>Missions on a schedule</h3>
+        <p>Set recurring missions — "triage new issues every morning", "summarise the week every Friday" — and the harness dispatches them automatically. Set it once, never think about it again.</p>
+      </div>
+      <div class="card t-coral reveal">
+        <div class="ic">🔭</div>
+        <h3>Real spend visibility</h3>
+        <p>The Activity tab reads your actual Claude Code transcript files and shows real token counts and estimated dollar cost per agent — not proxies. Set a budget, know when you're close.</p>
+      </div>
+      <div class="card t-rose reveal">
+        <div class="ic">🔔</div>
+        <h3>Stay in the loop, hands-off</h3>
+        <p>Native desktop notifications fire when an agent finishes a task or needs your input. CI failures, GitHub issues, and human-approval requests surface in the same Command Center without you polling.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -723,35 +756,49 @@
 <!-- ===================== CLAUDE ECOSYSTEM ===================== -->
 <section id="claude">
   <div class="wrap">
-    <div class="eyebrow reveal">Interfaced with the Claude ecosystem</div>
-    <h2 class="h2 reveal">Your Claude Code. <span class="sky">Just orchestrated.</span></h2>
-    <p class="lead reveal">Munder Difflin doesn't replace anything. It drives the <code class="inline">claude</code> CLI you
-      already run — using your existing Claude Code subscription, settings, skills, and MCP servers.</p>
+    <div class="eyebrow reveal">Powered by Claude Code</div>
+    <h2 class="h2 reveal">One model. <span class="sky">Every function a company needs.</span></h2>
+    <p class="lead reveal">Claude Code isn't a coding tool that happens to be smart — it's one of the most
+      capable reasoning agents ever built. Munder Difflin interfaces deeply with it and puts that
+      capability to work across every function your business runs on.</p>
 
-    <div class="int-grid reveal">
-      <div class="int"><div class="ic">🤖</div><div class="nm">Claude&nbsp;Code</div></div>
-      <div class="int"><div class="ic">🔌</div><div class="nm">MCP&nbsp;servers</div></div>
-      <div class="int"><div class="ic">🧩</div><div class="nm">Skills</div></div>
-      <div class="int"><div class="ic">🪝</div><div class="nm">Hooks</div></div>
-      <div class="int"><div class="ic">🔑</div><div class="nm">Your&nbsp;plan</div></div>
+    <div class="fn-grid reveal">
+      <div class="fn-card"><div class="fn-ic">💻</div><div class="fn-label">Engineering</div><div class="fn-ex">code · review · test · ship</div></div>
+      <div class="fn-card"><div class="fn-ic">📣</div><div class="fn-label">Marketing</div><div class="fn-ex">campaigns · copy · SEO content</div></div>
+      <div class="fn-card"><div class="fn-ic">🎯</div><div class="fn-label">Sales</div><div class="fn-ex">lead research · outreach · follow-ups</div></div>
+      <div class="fn-card"><div class="fn-ic">📊</div><div class="fn-label">Analysis</div><div class="fn-ex">reports · data · competitive intel</div></div>
+      <div class="fn-card"><div class="fn-ic">📝</div><div class="fn-label">Product</div><div class="fn-ex">specs · roadmaps · release notes</div></div>
+      <div class="fn-card"><div class="fn-ic">🔍</div><div class="fn-label">Research</div><div class="fn-ex">markets · users · literature</div></div>
+      <div class="fn-card"><div class="fn-ic">✍️</div><div class="fn-label">Writing</div><div class="fn-ex">docs · blogs · proposals</div></div>
+      <div class="fn-card"><div class="fn-ic">⚙️</div><div class="fn-label">Operations</div><div class="fn-ex">workflows · triage · monitoring</div></div>
     </div>
+
+    <hr style="border:none; border-top:2px solid var(--ink); opacity:0.12; margin:32px 0;">
 
     <div class="grid-2">
       <div class="card eco-card reveal">
-        <h3><span class="ic">🔌</span> Plugs into your setup</h3>
-        <p>Every agent is a normal Claude Code session with its own working directory and hook lifecycle.
-          Your subscription, your config, your tools — Munder Difflin just gives them a desk, a memory, and a mailbox.</p>
+        <h3><span class="ic">🔌</span> Plugs into every Claude Code setup</h3>
+        <p>Every agent is a real Claude Code session — your subscription, your MCP servers, your skills,
+          your hooks, your permission model. Munder Difflin gives each one a desk, a mailbox, and a shared
+          memory. Nothing is reinvented.</p>
       </div>
       <div class="card eco-card reveal">
-        <h3><span class="ic">📡</span> Remote-control the whole office</h3>
-        <p>Run <code class="inline">/remote-control</code> on your GOD agent and reach the entire floor from anywhere —
-          check in, redirect work, clear approvals, all through the one agent that runs everything else.</p>
-        <div class="term">
-          <div><span class="g">you</span> › <span class="y">/remote-control</span></div>
-          <div class="m">→ GOD online · 4 agents · 1 awaiting approval</div>
-          <div class="m">→ "approve the deploy, pause agent.research"</div>
-          <div><span class="ok">✓</span> done — from your phone.</div>
-        </div>
+        <h3><span class="ic">🧠</span> Runs your whole company, not just your codebase</h3>
+        <p>Spawn a sales agent to research leads while an engineering agent ships the feature, a marketing
+          agent drafts the launch post, and a product agent writes the release notes. One orchestrator.
+          One office. Every function, in parallel.</p>
+      </div>
+    </div>
+
+    <div class="card eco-card reveal" style="margin-top:20px;">
+      <h3><span class="ic">📡</span> Remote-control the whole office</h3>
+      <p>Run <code class="inline">/remote-control</code> on your GOD agent and reach the entire floor from anywhere —
+        check in, redirect work, clear approvals — all through the one agent that runs everything else.</p>
+      <div class="term">
+        <div><span class="g">you</span> › <span class="y">/remote-control</span></div>
+        <div class="m">→ GOD online · 4 agents · 1 awaiting approval</div>
+        <div class="m">→ "approve the deploy, pause agent.research"</div>
+        <div><span class="ok">✓</span> done — from your phone.</div>
       </div>
     </div>
   </div>
