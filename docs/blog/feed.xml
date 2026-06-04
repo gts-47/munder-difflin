@@ -200,6 +200,14 @@
     <summary>Agents used to answer in seconds; now they run for hours. The data behind the shift — and why a longer agent is a different problem, not just a bigger one.</summary>
   </entry>
   <entry>
+    <title>Observability for Agent Fleets: Seeing What Your Agents Do</title>
+    <link href="https://munderdiffl.in/blog/observability-for-agent-fleets/" />
+    <id>https://munderdiffl.in/blog/observability-for-agent-fleets/</id>
+    <published>2026-06-04T00:00:00.000Z</published>
+    <updated>2026-06-04T00:00:00.000Z</updated><category term="Internals" />
+    <summary>Agent fleet observability: the four questions your dashboard must answer about who&#39;s working, what they&#39;re doing, what it costs, and what they know.</summary>
+  </entry>
+  <entry>
     <title>Building AI Dev Tools in the Open, On Purpose</title>
     <link href="https://munderdiffl.in/blog/open-source-ai-tools-on-purpose/" />
     <id>https://munderdiffl.in/blog/open-source-ai-tools-on-purpose/</id>
@@ -478,13 +486,5 @@
     <published>2026-06-01T00:00:00.000Z</published>
     <updated>2026-06-01T00:00:00.000Z</updated><category term="Internals" />
     <summary>How an append-only event log makes a multi-agent system debuggable and replayable: what to record, and why one JSON line per event beats a database.</summary>
-  </entry>
-  <entry>
-    <title>How to Run Multiple Claude Code Agents (Without Losing Track)</title>
-    <link href="https://munderdiffl.in/blog/how-to-run-multiple-claude-code-agents/" />
-    <id>https://munderdiffl.in/blog/how-to-run-multiple-claude-code-agents/</id>
-    <published>2026-06-01T00:00:00.000Z</published>
-    <updated>2026-06-01T00:00:00.000Z</updated><category term="Guides" />
-    <summary>Run several Claude Code agents in parallel without the chaos: give each a role, let them coordinate, and stop alt-tabbing between terminal windows.</summary>
   </entry>
 </feed>
