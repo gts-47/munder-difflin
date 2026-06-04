@@ -4,7 +4,8 @@ import { Icon, type IconName } from './Icon';
 
 const TABS: { key: SidebarTab; label: string; icon: IconName }[] = [
   { key: 'terminal', label: 'terminal', icon: 'terminal' },
-  { key: 'files',    label: 'files',    icon: 'folder' }
+  { key: 'files',    label: 'files',    icon: 'folder' },
+  { key: 'messages', label: 'messages', icon: 'bell' }
 ];
 
 export interface SidebarTabsProps {
