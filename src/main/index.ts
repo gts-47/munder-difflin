@@ -18,6 +18,7 @@ import { MemoryManager } from './memory';
 import { enrichMessage } from './assistant';
 import { readAgentUsage } from './transcript';
 import { listIssues, listCIRuns } from './github';
+import { SlackWebhookServer } from './slack';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const ptyManager = new PtyManager();
@@ -151,6 +152,44 @@ function syncMissions(): void {
 function liveWebContents(): Electron.WebContents | null {
   const wc = mainWindow?.webContents;
   return wc && !wc.isDestroyed() ? wc : null;
+}
+
+// ─── Slack webhook server (Slack message → Michael's queue) ──────────────────
+/** The running Slack ingestion server, or null when disabled/stopped. */
+let slackServer: SlackWebhookServer | null = null;
+
+/** Build a SlackWebhookServer from the current config and start it, replacing
+ *  any running instance, and return the start result (incl. the public tunnel
+ *  URL the user pastes into Slack). No-op + error result when the integration is
+ *  disabled or the signing secret is unset. */
+async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const cfg = readConfig();
+  if (!cfg.slackEnabled || !cfg.slackSigningSecret) {
+    return { ok: false, error: 'slack disabled or missing signing secret' };
+  }
+  slackServer?.stop();
+  slackServer = new SlackWebhookServer({
+    port: cfg.slackPort && cfg.slackPort > 0 ? cfg.slackPort : 3847,
+    signingSecret: cfg.slackSigningSecret,
+    channelId: cfg.slackChannelId,
+    // Fires from the HTTP server's event loop (not the IPC thread); route through
+    // liveWebContents() so a message arriving during window teardown can't throw.
+    onMessage: (text) => {
+      try { liveWebContents()?.send('slack:incomingMessage', { text }); }
+      catch { /* window torn down */ }
+    }
+  });
+  const res = await slackServer.start();
+  // ok:false means we never bound the port → drop the instance. ok:true with no
+  // url just means the tunnel is unavailable; the local handler is still live.
+  if (!res.ok) slackServer = null;
+  return res;
+}
+
+/** Stop and forget the Slack server. Best-effort; safe to call when not running. */
+function stopSlackServer(): void {
+  try { slackServer?.stop(); } catch (e) { console.error('[slack] stop failed:', e); }
+  slackServer = null;
 }
 
 function createWindow(): void {
@@ -435,6 +474,7 @@ ipcMain.handle('app:confirmClose', () => {
   try { clearMissionTimers(); } catch (e) { console.error('[quit] clearMissionTimers:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[quit] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[quit] hookServer.stop:', e); }
+  try { stopSlackServer(); } catch (e) { console.error('[quit] slack.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[quit] memory.stop:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   app.quit();
@@ -450,6 +490,7 @@ ipcMain.handle('app:resetAll', () => {
   try { clearMissionTimers(); } catch (e) { console.error('[reset] clearMissionTimers:', e); }
   try { hive.stopRouter(); } catch (e) { console.error('[reset] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[reset] hookServer.stop:', e); }
+  try { stopSlackServer(); } catch (e) { console.error('[reset] slack.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[reset] memory.stop:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[reset] killAll:', e); }
   // Erase the hive (Michael's + every agent's memory, inboxes, tasks, board,
@@ -539,6 +580,29 @@ ipcMain.handle('github:ciRuns', (_evt, cwd: unknown) =>
 // ─── IPC: desktop notifications toggle ──────────────────────────────────────
 ipcMain.handle('app:setNotifications', (_evt, val) => writeConfig({ notifications: val === true }));
 
+// ─── IPC: Slack integration ─────────────────────────────────────────────────
+ipcMain.handle('slack:start', () => startSlackServer());
+ipcMain.handle('slack:stop', () => { stopSlackServer(); return { ok: true }; });
+ipcMain.handle('slack:setConfig', (_evt, patch: unknown) => {
+  const p = (patch ?? {}) as {
+    signingSecret?: unknown; botToken?: unknown; channelId?: unknown; port?: unknown; enabled?: unknown;
+  };
+  const next: Partial<HarnessConfig> = {};
+  // Trim string fields; an emptied field clears back to undefined.
+  if (typeof p.signingSecret === 'string') next.slackSigningSecret = p.signingSecret.trim() || undefined;
+  if (typeof p.botToken === 'string') next.slackBotToken = p.botToken.trim() || undefined;
+  if (typeof p.channelId === 'string') next.slackChannelId = p.channelId.trim() || undefined;
+  if (typeof p.port === 'number' && Number.isFinite(p.port)) next.slackPort = p.port;
+  if (typeof p.enabled === 'boolean') next.slackEnabled = p.enabled;
+  writeConfig(next);
+  // Reconcile the running server: disabling (or clearing the secret) stops it. We
+  // deliberately do NOT auto-(re)start here — the user presses Start in Settings
+  // to fetch the fresh (ephemeral) tunnel URL.
+  const cfg = readConfig();
+  if (!cfg.slackEnabled || !cfg.slackSigningSecret) stopSlackServer();
+  return { ok: true };
+});
+
 app.whenReady().then(() => {
   // Bootstrap the hive (if harnessHome is configured) and start the message router.
   if (hive.enabled()) {
@@ -549,6 +613,16 @@ app.whenReady().then(() => {
     memory.start(); // init shared palace + mine loop (no-op without mempalace)
   }
   createWindow();
+  // Auto-start the Slack webhook server when configured. Best-effort: a tunnel
+  // failure (offline) is logged, not fatal. The tunnel URL is ephemeral and
+  // changes per restart, so the user re-pastes it via Settings → Start.
+  const slackCfg = readConfig();
+  if (slackCfg.slackEnabled && slackCfg.slackSigningSecret) {
+    void startSlackServer().then((r) => {
+      if (!r.ok) console.error('[slack] auto-start failed:', r.error);
+      else console.log('[slack] webhook listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
+    });
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

@@ -322,4 +322,16 @@ export function useHive(config: HarnessConfig | null): void {
     schedule();
     return () => { unsub(); if (debounce) clearTimeout(debounce); clearInterval(iv); };
   }, [config?.onboardingComplete]);
+
+  // 5) Pipe inbound Slack messages into Michael's queue. The main-process Slack
+  //    webhook server pushes each verified message here via IPC; enqueueing to
+  //    GOD_ID lands it in Michael's queue exactly as if the user had typed it
+  //    into the composer — effect #4 above then drains it to his PTY.
+  useEffect(() => {
+    if (!config?.onboardingComplete) return;
+    return window.cth.onSlackMessage((msg) => {
+      if (!msg?.text?.trim()) return;
+      useStore.getState().enqueueMessage(GOD_ID, msg.text.trim());
+    });
+  }, [config?.onboardingComplete]);
 }

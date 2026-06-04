@@ -320,7 +320,28 @@ const api = {
   /** Archive/unarchive a hive agent in the registry. Closing a terminal tab
    *  archives it automatically via pty:kill; this is the explicit primitive. */
   hiveSetArchived: (id: string, archived: boolean): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('hive:setArchived', id, archived)
+    ipcRenderer.invoke('hive:setArchived', id, archived),
+
+  // ─── Slack integration (Slack message → Michael's queue) ─────────────────────
+  /** Register a listener for inbound Slack messages; returns an unsubscribe fn.
+   *  Same pattern as onHiveHookEvent. */
+  onSlackMessage: (cb: (msg: { text: string }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, msg: { text: string }) => cb(msg);
+    ipcRenderer.on('slack:incomingMessage', listener);
+    return () => ipcRenderer.removeListener('slack:incomingMessage', listener);
+  },
+  /** Start the Slack webhook server; returns the public tunnel URL to paste into
+   *  the Slack app's Event Subscriptions → Request URL. */
+  slackStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
+    ipcRenderer.invoke('slack:start'),
+  /** Stop the Slack webhook server + tunnel. */
+  slackStop: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('slack:stop'),
+  /** Persist Slack settings (and stop the server if disabled / secret cleared). */
+  slackSetConfig: (patch: {
+    signingSecret?: string; botToken?: string; channelId?: string; port?: number; enabled?: boolean;
+  }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('slack:setConfig', patch)
 };
 
 contextBridge.exposeInMainWorld('cth', api);

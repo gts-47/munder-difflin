@@ -34,6 +34,16 @@ export interface HarnessConfig {
   missions?: ScheduledMission[];
   /** Fire native desktop notifications on agent lifecycle events (idle finish / waiting for input). */
   notifications?: boolean;
+  /** Master toggle for the Slack → Michael's-queue integration. */
+  slackEnabled?: boolean;
+  /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */
+  slackSigningSecret?: string;
+  /** Bot token (xoxb-…) — only needed if the bot ever replies; optional for now. */
+  slackBotToken?: string;
+  /** Restrict ingestion to one channel id; empty/undefined = any channel. */
+  slackChannelId?: string;
+  /** Local HTTP port the webhook server binds to (default 3847). */
+  slackPort?: number;
 }
 
 const DEFAULTS: HarnessConfig = {
@@ -45,7 +55,12 @@ const DEFAULTS: HarnessConfig = {
   semanticMemory: true,
   embeddingModel: 'minilm',
   missions: [],
-  notifications: false
+  notifications: false,
+  slackEnabled: false,
+  slackSigningSecret: undefined,
+  slackBotToken: undefined,
+  slackChannelId: undefined,
+  slackPort: undefined
 };
 
 function configPath(): string {

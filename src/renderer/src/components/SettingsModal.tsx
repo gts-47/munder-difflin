@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { HarnessConfig } from '@/store/config';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
@@ -8,6 +8,36 @@ export interface SettingsModalProps {
   config: HarnessConfig;
   onClose: () => void;
 }
+
+/** Slack fields live on the main-process config; the renderer mirror type doesn't
+ *  declare them yet (same as `notifications`), so read them off a widened view. */
+type SlackConfig = HarnessConfig & {
+  slackEnabled?: boolean;
+  slackSigningSecret?: string;
+  slackChannelId?: string;
+  slackPort?: number;
+};
+
+/** Pixel-aesthetic text input, mirroring AddAgentModal's inputStyle. */
+const slackInputStyle: CSSProperties = {
+  width: '100%',
+  padding: '6px 8px 4px',
+  background: 'var(--cth-paper-100)',
+  border: 'none',
+  boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)',
+  fontFamily: 'var(--cth-font-ui)',
+  fontSize: 14,
+  color: 'var(--cth-ink-900)',
+  outline: 'none'
+};
+
+const slackLabelStyle: CSSProperties = {
+  fontFamily: 'var(--cth-font-display)',
+  fontSize: 8,
+  lineHeight: '12px',
+  color: 'var(--cth-ink-700)',
+  textTransform: 'uppercase'
+};
 
 /** Clear every renderer-side persisted key so a relaunch starts truly empty. */
 function clearLocalState(): void {
@@ -36,6 +66,61 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
     try { await window.cth.setNotifications(next); }
     catch { setNotifications(!next); /* revert on failure */ }
   };
+
+  // ─── Slack integration ─────────────────────────────────────────────────────
+  const slackCfg = config as SlackConfig;
+  const [slackEnabled, setSlackEnabled] = useState(slackCfg.slackEnabled ?? false);
+  const [slackSecret, setSlackSecret] = useState(slackCfg.slackSigningSecret ?? '');
+  const [slackChannel, setSlackChannel] = useState(slackCfg.slackChannelId ?? '');
+  const [slackPort, setSlackPort] = useState(String(slackCfg.slackPort ?? 3847));
+  const [tunnelUrl, setTunnelUrl] = useState('');
+  const [slackBusy, setSlackBusy] = useState(false);
+  const [slackNote, setSlackNote] = useState('');
+
+  /** Persist the current Slack inputs. Returns the resolved config patch. */
+  const slackPatch = (enabled: boolean) => ({
+    signingSecret: slackSecret,
+    channelId: slackChannel,
+    port: Number(slackPort) || 3847,
+    enabled
+  });
+
+  const saveSlack = async () => {
+    setSlackBusy(true); setSlackNote('');
+    try {
+      await window.cth.slackSetConfig(slackPatch(slackEnabled));
+      setSlackNote('saved');
+    } catch (e) {
+      setSlackNote(e instanceof Error ? e.message : String(e));
+    } finally { setSlackBusy(false); }
+  };
+
+  const startSlack = async () => {
+    setSlackBusy(true); setSlackNote('');
+    try {
+      // Persist first so the server starts with the latest secret/port/channel.
+      await window.cth.slackSetConfig(slackPatch(true));
+      setSlackEnabled(true);
+      const res = await window.cth.slackStart();
+      if (res.ok) {
+        setTunnelUrl(res.url ?? '');
+        setSlackNote(res.url ? 'listening' : (res.error ?? 'started, but tunnel unavailable'));
+      } else {
+        setSlackNote(res.error ?? 'failed to start');
+      }
+    } catch (e) {
+      setSlackNote(e instanceof Error ? e.message : String(e));
+    } finally { setSlackBusy(false); }
+  };
+
+  const stopSlack = async () => {
+    setSlackBusy(true); setSlackNote('');
+    try { await window.cth.slackStop(); setTunnelUrl(''); setSlackNote('stopped'); }
+    catch (e) { setSlackNote(e instanceof Error ? e.message : String(e)); }
+    finally { setSlackBusy(false); }
+  };
+
+  const copyTunnel = () => { void window.cth.copyToClipboard(tunnelUrl); };
 
   const reset = async () => {
     setBusy(true);
@@ -95,6 +180,103 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                 >
                   {notifications ? 'on' : 'off'}
                 </PixelButton>
+              </div>
+
+              <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
+
+              {/* Slack integration */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                      Slack integration
+                    </span>
+                    <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                      Pipe a Slack channel's messages straight into Michael's queue.
+                    </span>
+                  </div>
+                  <PixelButton
+                    variant={slackEnabled ? 'primary' : 'secondary'}
+                    size="sm"
+                    onClick={() => setSlackEnabled((v) => !v)}
+                  >
+                    {slackEnabled ? 'on' : 'off'}
+                  </PixelButton>
+                </div>
+
+                {slackEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={slackLabelStyle}>Signing secret</span>
+                      <input
+                        type="password"
+                        value={slackSecret}
+                        onChange={(e) => setSlackSecret(e.target.value)}
+                        placeholder="Slack app → Basic Information → Signing Secret"
+                        style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                      />
+                    </label>
+
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                        <span style={slackLabelStyle}>Channel id (optional)</span>
+                        <input
+                          value={slackChannel}
+                          onChange={(e) => setSlackChannel(e.target.value)}
+                          placeholder="C0123… or blank for any"
+                          style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 92 }}>
+                        <span style={slackLabelStyle}>Port</span>
+                        <input
+                          type="number"
+                          value={slackPort}
+                          onChange={(e) => setSlackPort(e.target.value)}
+                          placeholder="3847"
+                          style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                        />
+                      </label>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <PixelButton variant="primary" size="sm" onClick={startSlack} disabled={slackBusy || !slackSecret.trim()}>
+                        {slackBusy ? '…' : 'start'}
+                      </PixelButton>
+                      <PixelButton variant="secondary" size="sm" onClick={stopSlack} disabled={slackBusy}>
+                        stop
+                      </PixelButton>
+                      <PixelButton variant="ghost" size="sm" onClick={saveSlack} disabled={slackBusy}>
+                        save
+                      </PixelButton>
+                      {slackNote && (
+                        <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{slackNote}</span>
+                      )}
+                    </div>
+
+                    {tunnelUrl && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span style={slackLabelStyle}>Request URL — paste into Slack Event Subscriptions</span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            readOnly
+                            value={tunnelUrl}
+                            onFocus={(e) => e.currentTarget.select()}
+                            style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 12 }}
+                          />
+                          <PixelButton variant="secondary" size="sm" onClick={copyTunnel}>copy</PixelButton>
+                        </div>
+                      </div>
+                    )}
+
+                    <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                      In your Slack app: enable Event Subscriptions → add the{' '}
+                      <code>message.channels</code> / <code>message.groups</code> bot event → set the
+                      Request URL above → reinstall to your workspace. The tunnel URL changes on every
+                      restart, so re-paste it after pressing Start again.
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
