@@ -103,6 +103,24 @@ function shortRand(): string {
   return randomBytes(3).toString('hex');
 }
 
+/** Non-memory files `mempalace mine` must not ingest (Claude Code hooks config,
+ *  cursor, raw inbox/outbox JSON). `mempalace mine` honors .gitignore, so we drop
+ *  one in each agent dir; written on birth here and refreshed by the mine loop. */
+const MINE_IGNORE_LINES = ['settings.json', 'cursor.json', 'inbox/', 'outbox/'];
+
+/** Idempotently ensure `<agentDir>/.gitignore` excludes the non-memory files.
+ *  Append-only: writes only the missing lines, leaving any existing entries. */
+function ensureMineIgnore(agentDir: string): void {
+  const path = join(agentDir, '.gitignore');
+  let existing = '';
+  try { if (existsSync(path)) existing = readFileSync(path, 'utf8'); } catch { return; }
+  const have = new Set(existing.split('\n').map((l) => l.trim()));
+  const missing = MINE_IGNORE_LINES.filter((l) => !have.has(l));
+  if (missing.length === 0) return;
+  const prefix = existing && !existing.endsWith('\n') ? existing + '\n' : existing;
+  try { writeFileSync(path, prefix + missing.join('\n') + '\n', 'utf8'); } catch { /* best-effort */ }
+}
+
 // ─── HiveManager ────────────────────────────────────────────────────────────
 
 export class HiveManager {
@@ -205,6 +223,7 @@ export class HiveManager {
     if (!existsSync(memory)) {
       writeFileSync(memory, `# Memory — ${meta.name} (${meta.id})\n\n_Append durable facts, decisions, and context below._\n`, 'utf8');
     }
+    ensureMineIgnore(dir); // keep settings.json / cursor / messages out of mempalace's index
     const cursor = join(dir, 'cursor.json');
     if (!existsSync(cursor)) this.writeJson(cursor, { lastProcessed: null });
 

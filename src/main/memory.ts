@@ -13,9 +13,28 @@
  *
  * Runs in the Electron main process.
  */
-import { existsSync, statSync, readdirSync } from 'node:fs';
+import { existsSync, statSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+
+/** Non-memory files `mempalace mine` must not ingest: the Claude Code hooks
+ *  config (a large JSON blob that swamps the wake-up digest), the cursor, and
+ *  raw inbox/outbox message JSON. `mempalace mine` honors .gitignore, so we drop
+ *  one in each agent dir rather than touch the mine command. */
+const MINE_IGNORE_LINES = ['settings.json', 'cursor.json', 'inbox/', 'outbox/'];
+
+/** Idempotently ensure `<agentDir>/.gitignore` excludes the non-memory files.
+ *  Writes only the missing lines (append-only) so it's safe to call every cycle. */
+function ensureMineIgnore(agentDir: string): void {
+  const path = join(agentDir, '.gitignore');
+  let existing = '';
+  try { if (existsSync(path)) existing = readFileSync(path, 'utf8'); } catch { return; }
+  const have = new Set(existing.split('\n').map((l) => l.trim()));
+  const missing = MINE_IGNORE_LINES.filter((l) => !have.has(l));
+  if (missing.length === 0) return; // already covered — don't rewrite every cycle
+  const prefix = existing && !existing.endsWith('\n') ? existing + '\n' : existing;
+  try { writeFileSync(path, prefix + missing.join('\n') + '\n', 'utf8'); } catch { /* best-effort */ }
+}
 
 export type EmbeddingModel = 'minilm' | 'embeddinggemma';
 
@@ -188,6 +207,7 @@ export class MemoryManager {
     return new Promise((resolve) => {
       const bin = this.bin();
       if (!bin) { resolve(); return; }
+      ensureMineIgnore(agentDir); // keep settings.json / cursor / messages out of the index
       // stdin closed (mempalace can prompt); mempalace dedups so re-mining is safe.
       const proc = spawn(bin, ['mine', agentDir, '--wing', id, '--agent', id], {
         env: this.childEnv(), stdio: ['ignore', 'ignore', 'pipe']
