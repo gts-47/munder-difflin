@@ -2,6 +2,17 @@ import { app } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+/** A recurring auto-dispatched mission fired on an interval by the scheduler. */
+export interface ScheduledMission {
+  id: string;
+  label: string;
+  intervalMs: number;
+  to: string;
+  body: string;
+  enabled: boolean;
+  lastFiredAt?: number;
+}
+
 export interface HarnessConfig {
   /** Has the user completed the first-run onboarding? */
   onboardingComplete: boolean;
@@ -19,6 +30,8 @@ export interface HarnessConfig {
   semanticMemory: boolean;
   /** Embedding model for the palace: lightweight 'minilm' or multilingual 'embeddinggemma'. */
   embeddingModel: 'minilm' | 'embeddinggemma';
+  /** Recurring auto-dispatch missions handled by the scheduler. */
+  missions?: ScheduledMission[];
 }
 
 const DEFAULTS: HarnessConfig = {
@@ -28,7 +41,8 @@ const DEFAULTS: HarnessConfig = {
   autoMode: true,
   defaultCommand: 'claude',
   semanticMemory: true,
-  embeddingModel: 'minilm'
+  embeddingModel: 'minilm',
+  missions: []
 };
 
 function configPath(): string {

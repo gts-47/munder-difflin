@@ -19,6 +19,25 @@ import { buildSpawnCommand, AGENT_MODELS } from '@/store/config';
 
 type CCTab = 'terminal' | 'floor' | 'tasks' | 'memory' | 'activity' | 'handbook';
 
+/** A recurring auto-dispatched mission (mirrors the main-process config type). */
+interface ScheduledMission {
+  id: string;
+  label: string;
+  intervalMs: number;
+  to: string;
+  body: string;
+  enabled: boolean;
+  lastFiredAt?: number;
+}
+
+/** Interval presets offered in the SCHEDULES form / shown as badges. */
+const INTERVAL_OPTS: { ms: number; label: string }[] = [
+  { ms: 3600000, label: '1h' },
+  { ms: 21600000, label: '6h' },
+  { ms: 86400000, label: '24h' },
+  { ms: 604800000, label: 'weekly' }
+];
+
 const TABS: { key: CCTab; label: string; icon: Parameters<typeof Icon>[0]['name'] }[] = [
   { key: 'terminal', label: 'terminal', icon: 'terminal' },
   { key: 'floor', label: 'floor', icon: 'mcp' },
@@ -151,8 +170,16 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   const [dispatchText, setDispatchText] = useState('');
   const [dispatchMsg, setDispatchMsg] = useState<string | null>(null);
 
+  // ── Scheduled missions (recurring auto-dispatch) ──
+  const [missions, setMissions] = useState<ScheduledMission[]>([]);
+  const [mLabel, setMLabel] = useState('');
+  const [mInterval, setMInterval] = useState<string>(String(INTERVAL_OPTS[0].ms));
+  const [mTo, setMTo] = useState<string>('god');
+  const [mBody, setMBody] = useState('');
+
   useEffect(() => {
     window.cth.getConfig().then((c) => setRepos(c.registeredRepos ?? [])).catch(() => { /* noop */ });
+    window.cth.listMissions().then(setMissions).catch(() => { /* noop */ });
   }, []);
 
   // Seed the dispatch box from a task-card "assign" (keyed on seq so repeat
@@ -160,6 +187,29 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
   useEffect(() => {
     if (seed.seq > 0) setDispatchText(seed.text);
   }, [seed.seq, seed.text]);
+
+  const persistMissions = async (next: ScheduledMission[]) => {
+    setMissions(next);
+    await window.cth.saveMissions(next).catch(() => { /* noop */ });
+  };
+  const toggleMission = (id: string) =>
+    persistMissions(missions.map((m) => (m.id === id ? { ...m, enabled: !m.enabled } : m)));
+  const addMission = () => {
+    if (!mLabel.trim() || !mBody.trim()) return;
+    const next: ScheduledMission = {
+      id: `m_${Date.now().toString(36)}`,
+      label: mLabel.trim(),
+      intervalMs: Number(mInterval),
+      to: mTo,
+      body: mBody.trim(),
+      enabled: true
+    };
+    persistMissions([...missions, next]);
+    setMLabel(''); setMBody('');
+  };
+  const targetName = (to: string) =>
+    to === 'broadcast' ? 'everyone' : to === 'god' ? 'Michael' : agents.find((a) => a.id === to)?.name ?? to;
+  const intervalLabel = (ms: number) => INTERVAL_OPTS.find((o) => o.ms === ms)?.label ?? `${Math.round(ms / 3600000)}h`;
 
   const restartWithModel = async (a: Agent, model: string | undefined) => {
     if (!a.ptyId) return;
@@ -280,6 +330,65 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
               fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)'
             }}
           ><Icon name="sparkle" /> enrich {enrichEnabled ? 'on' : 'off'}</button>
+        </div>
+      </Section>
+
+      <Section title="SCHEDULES">
+        {missions.length === 0 && <Muted>No scheduled missions.</Muted>}
+        {missions.map((m) => (
+          <div key={m.id} style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: 6, marginBottom: 6,
+            background: 'var(--cth-paper-100)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)'
+          }}>
+            <span style={{
+              fontFamily: 'var(--cth-font-display)', fontSize: 9, padding: '2px 5px 1px',
+              background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)',
+              color: 'var(--cth-ink-900)', flexShrink: 0
+            }}>{intervalLabel(m.intervalMs)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, color: 'var(--cth-ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>→ {targetName(m.to)}</div>
+            </div>
+            <button
+              onClick={() => toggleMission(m.id)}
+              style={{
+                padding: '2px 8px 1px', border: 'none', cursor: 'pointer', flexShrink: 0,
+                background: m.enabled ? 'var(--cth-lemon)' : 'var(--cth-cream-200)',
+                boxShadow: `inset 0 0 0 1px ${m.enabled ? 'var(--cth-ink-900)' : 'var(--cth-ink-700)'}`,
+                fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-900)'
+              }}
+            >{m.enabled ? 'on' : 'off'}</button>
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, marginBottom: 6 }}>
+          <input
+            value={mLabel}
+            onChange={(e) => setMLabel(e.target.value)}
+            placeholder="mission label"
+            style={{ ...textareaStyle, flex: 1, fontFamily: 'var(--cth-font-ui)' }}
+          />
+          <Select value={mInterval} onChange={setMInterval}>
+            {INTERVAL_OPTS.map((o) => <option key={o.ms} value={String(o.ms)}>{o.label}</option>)}
+          </Select>
+          <Select value={mTo} onChange={setMTo}>
+            <option value="broadcast">everyone</option>
+            <option value="god">Michael</option>
+            {agents.filter((a) => !a.isGod).map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </Select>
+        </div>
+        <textarea
+          value={mBody}
+          onChange={(e) => setMBody(e.target.value)}
+          rows={2}
+          placeholder="Recurring task body… (dispatched on each interval)"
+          style={textareaStyle}
+        />
+        <div style={{ marginTop: 6 }}>
+          <PixelButton variant="primary" size="sm" onClick={addMission} disabled={!mLabel.trim() || !mBody.trim()}>
+            add mission
+          </PixelButton>
         </div>
       </Section>
 

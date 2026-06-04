@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { PtyManager, type SpawnOptions } from './pty';
 import {
   readConfig, writeConfig, resetConfig, ensureHarnessHome,
-  type HarnessConfig
+  type HarnessConfig, type ScheduledMission
 } from './config';
 import { listDir, readFileText, writeFileText } from './fs';
 import {
@@ -40,6 +40,37 @@ const worktreePaths = new Map<string, string>();
 /** id → the original repo cwd the worktree was created from (needed to run
  *  `git worktree remove` from the parent tree, not the worktree itself). */
 const worktreeOrigins = new Map<string, string>();
+
+/** Active scheduler timers keyed by mission id. */
+const missionTimers = new Map<string, NodeJS.Timeout>();
+
+/** Rebuild the scheduler from persisted config: clear every existing timer,
+ *  then arm a fresh interval for each enabled mission. Each tick dispatches the
+ *  mission to its target agent and stamps lastFiredAt back into config. Called
+ *  on boot (after the router starts) and after every missions:save. */
+function syncMissions(): void {
+  for (const t of missionTimers.values()) clearInterval(t);
+  missionTimers.clear();
+  const missions = readConfig().missions ?? [];
+  for (const m of missions) {
+    if (!m.enabled || !(m.intervalMs > 0)) continue;
+    const timer = setInterval(() => {
+      try {
+        if (hive.enabled()) {
+          hive.send({ to: m.to, act: 'request', subject: m.label, body: m.body }, 'scheduler');
+        }
+        const current = readConfig().missions ?? [];
+        const next = current.map((x) =>
+          x.id === m.id ? { ...x, lastFiredAt: Date.now() } : x
+        );
+        writeConfig({ missions: next });
+      } catch (e) {
+        console.error('[scheduler] mission', m.id, e);
+      }
+    }, m.intervalMs);
+    missionTimers.set(m.id, timer);
+  }
+}
 
 /** The live renderer webContents, or null if the window is gone/destroyed.
  *  Anything that emits to the renderer from a timer/socket/child callback must
@@ -354,11 +385,20 @@ ipcMain.handle('app:resetAll', () => {
 ipcMain.handle('hive:agentUsage', (_evt, cwd: unknown) =>
   typeof cwd === 'string' ? readAgentUsage(cwd) : null);
 
+// ─── IPC: scheduled missions (recurring auto-dispatch) ──────────────────────
+ipcMain.handle('missions:list', () => readConfig().missions ?? []);
+ipcMain.handle('missions:save', (_evt, missions) => {
+  writeConfig({ missions: missions as ScheduledMission[] });
+  syncMissions();
+  return { ok: true };
+});
+
 app.whenReady().then(() => {
   // Bootstrap the hive (if harnessHome is configured) and start the message router.
   if (hive.enabled()) {
     hive.ensureHive();
     hive.startRouter();
+    syncMissions(); // arm recurring auto-dispatch missions now the router is live
     hookServer.start();
     memory.start(); // init shared palace + mine loop (no-op without mempalace)
   }

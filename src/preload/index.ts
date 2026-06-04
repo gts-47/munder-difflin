@@ -70,6 +70,17 @@ export interface SpawnPtyOptions {
 
 export interface PtyExit { exitCode: number; signal?: number | undefined }
 
+/** A recurring auto-dispatched mission fired on an interval by the scheduler. */
+export interface ScheduledMission {
+  id: string;
+  label: string;
+  intervalMs: number;
+  to: string;
+  body: string;
+  enabled: boolean;
+  lastFiredAt?: number;
+}
+
 export interface HarnessConfig {
   onboardingComplete: boolean;
   harnessHome: string | null;
@@ -79,6 +90,7 @@ export interface HarnessConfig {
   defaultModel?: string;
   semanticMemory: boolean;
   embeddingModel: 'minilm' | 'embeddinggemma';
+  missions?: ScheduledMission[];
 }
 
 export interface MemoryStatus {
@@ -254,7 +266,12 @@ const api = {
   // ─── Task kanban (hive/tasks.json) ───────────────────────────────────────
   /** Overwrite the hive task ledger with the full task list and commit it. */
   hiveWriteTasks: (tasks: HiveTask[]): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('hive:writeTasks', tasks)
+    ipcRenderer.invoke('hive:writeTasks', tasks),
+
+  // ─── Scheduled missions (recurring auto-dispatch) ──────────────────────────
+  listMissions: (): Promise<ScheduledMission[]> => ipcRenderer.invoke('missions:list'),
+  saveMissions: (missions: ScheduledMission[]): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('missions:save', missions)
 };
 
 contextBridge.exposeInMainWorld('cth', api);
