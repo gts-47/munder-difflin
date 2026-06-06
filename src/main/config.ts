@@ -38,8 +38,11 @@ export const OPS_STANDUP_MISSION: ScheduledMission = {
     'Hourly ops standup. Review every agent: who is doing what, and confirm each ' +
     'is still running (not stalled or idle-stale). Check the task board — are ' +
     'in-flight tasks on track, and is anything blocked or unowned? Flag stale ' +
-    'agents and at-risk tasks, and keep the board accurate. (Terminal contexts ' +
-    'are auto-compacted as part of this standup.)',
+    'agents and at-risk tasks, and keep the board accurate. (As part of this ' +
+    "standup each working agent is asked to summarise its current task and the " +
+    'next step, then compact and resume from the same point — so terminal ' +
+    'contexts stay bounded without losing work. The compaction is queued and ' +
+    'runs when an agent is idle, so it never interrupts work mid-step.)',
   enabled: true,
   autoCompact: true
 };

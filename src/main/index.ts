@@ -212,16 +212,12 @@ function syncMissions(): void {
         if (hive.enabled()) {
           hive.send({ to: m.to, act: 'request', subject: m.label, body: m.body }, 'scheduler');
         }
-        // Compact every live terminal's context on this tick. Send the slash
-        // command, then a return a beat later (the input box needs the text to
-        // register before submit — mirrors the renderer's submitToPty cadence).
+        // Auto-compact: do NOT jam /compact into busy terminals. Hand it to the
+        // renderer, which queues a /compact per agent (deduped — never two at
+        // once) and delivers it only when that agent goes idle (its drain loop),
+        // so a working agent compacts between steps, never mid-step.
         if (m.autoCompact) {
-          for (const t of ptyManager.list()) {
-            try {
-              ptyManager.write(t.id, '/compact');
-              setTimeout(() => { try { ptyManager.write(t.id, '\r'); } catch { /* pty gone */ } }, 200);
-            } catch { /* pty gone */ }
-          }
+          try { liveWebContents()?.send('mission:autoCompact'); } catch { /* window gone */ }
         }
         const current = readConfig().missions ?? [];
         const next = current.map((x) =>
@@ -363,20 +359,14 @@ function buildHeartbeatDigest(quietMs: number): string {
   ].join('\n');
 }
 
-/** Re-engage a quiet floor: ALWAYS drop a durable digest into god's inbox; and
- *  ONLY when god's PTY is genuinely idle (>5s since last output = not mid-stream)
- *  also nudge it to wake a dormant god. The idle gate is the ironclad safety —
- *  never type into a PTY that produced output recently. */
+/** Re-engage a quiet floor: drop a durable digest into god's inbox. We never
+ *  type directly into god's PTY here — if he's busy that would jam mid-step. The
+ *  inbox message is delivered by the renderer's busy-aware inbox-wake (it nudges
+ *  god to read his inbox only once he's idle), so the heartbeat defers around a
+ *  working god instead of interrupting him. */
 function reengageGod(digest: string): void {
   if (!hive.enabled()) return;
   hive.send({ to: 'god', act: 'request', subject: 'Heartbeat', body: digest }, 'heartbeat');
-  const godId = hive.registry().godId;
-  if (!godId) return;
-  const godPty = ptyForAgent(godId);
-  if (godPty && (ptyManager.idleFor(godPty) ?? 0) > 5_000) {
-    ptyManager.write(godPty, 'Heartbeat digest waiting in your inbox — review, re-engage anyone stalled, else rest.');
-    setTimeout(() => { try { ptyManager.write(godPty, '\r'); } catch { /* pty gone */ } }, 200);
-  }
 }
 
 /** A native toast for breaker constrain/stop, gated on the notifications setting. */

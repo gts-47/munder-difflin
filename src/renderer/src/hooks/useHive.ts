@@ -30,6 +30,14 @@ const INITIAL_GOD_PROMPT = [
   'Then begin orchestrating: triage requests, delegate work to the team, and keep everyone unblocked. You are fully autonomous — there is no approval queue, so handle tool-permission prompts in this session yourself (the human can approve them remotely from their phone).'
 ].join('\n');
 
+// Scheduled auto-compact command (from the ops standup). Queued per agent and
+// delivered when idle, so it never interrupts a working agent. The focus
+// instructions make the agent record its current task + next step into the
+// summary, so it resumes from the same point after compacting.
+const COMPACT_CMD =
+  '/compact Summarise exactly what you are currently working on and the next step, ' +
+  'so you can resume from the same point — then continue that work after compacting.';
+
 // Per-pty submission chain. Every submitToPty for a given pty is appended here so
 // two callers (e.g. the boot sequence's /remote-control and the inbox-wake nudge)
 // can NEVER interleave their text + Enter — which jammed them onto one line and
@@ -441,8 +449,11 @@ export function useHive(config: HarnessConfig | null): void {
 
       // Michael's queue: enrich OFF → straight to Michael; enrich ON → wrap as an
       // ENRICH TASK and route to the assistant, which forwards to Michael's inbox.
+      // A slash command (e.g. a queued /compact) is NEVER enriched — it must hit
+      // Michael's own session verbatim.
       if (messageQueues[GOD_ID]?.length) {
-        if (enrichEnabled) dispatch(GOD_ID, byId(ASSISTANT_ID), enrichTaskPrompt);
+        const isCmd = messageQueues[GOD_ID][0].text.startsWith('/');
+        if (enrichEnabled && !isCmd) dispatch(GOD_ID, byId(ASSISTANT_ID), enrichTaskPrompt);
         else dispatch(GOD_ID, byId(GOD_ID));
       }
     };
@@ -469,6 +480,23 @@ export function useHive(config: HarnessConfig | null): void {
     return window.cth.onSlackMessage((msg) => {
       if (!msg?.text?.trim()) return;
       useStore.getState().enqueueMessage(GOD_ID, msg.text.trim());
+    });
+  }, [config?.onboardingComplete]);
+
+  // 6) Auto-compact (scheduled standup). Main fires this per tick; we queue a
+  //    /compact for each live agent so the drain (#4) delivers it only when the
+  //    agent is idle — never jamming a working terminal. Deduped: if a /compact
+  //    is already queued for an agent, skip it (no second one piles up).
+  useEffect(() => {
+    if (!config?.onboardingComplete) return;
+    return window.cth.onAutoCompact(() => {
+      const { agents, messageQueues, enqueueMessage } = useStore.getState();
+      for (const a of agents) {
+        if (!a.ptyId) continue;
+        const queued = messageQueues[a.id] ?? [];
+        if (queued.some((m) => m.text.trimStart().startsWith('/compact'))) continue;
+        enqueueMessage(a.id, COMPACT_CMD);
+      }
     });
   }, [config?.onboardingComplete]);
 }
