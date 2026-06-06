@@ -543,9 +543,10 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   if (opts.hive) {
     const cfg = readConfig();
     const args = opts.args ?? [];
-    // Default model by role — only if the renderer didn't pass an explicit --model.
+    // Model precedence: an explicit per-agent --model (from the renderer) wins;
+    // else the user's global defaultModel; else the role-based default tier.
     if (!args.includes('--model')) {
-      const m = modelForRole(opts.hive);
+      const m = cfg.defaultModel ?? modelForRole(opts.hive);
       if (m) args.push('--model', m);
     }
     // Coarse runaway cap.
