@@ -125,16 +125,19 @@ export function CommandCenterPanel({ agent }: { agent: Agent }) {
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{
+      {/* Tab bar — horizontally scrollable so all tabs stay reachable when the
+          sidebar is narrow (otherwise the last tabs clip off the edge). */}
+      <div className="cth-tabbar" style={{
         display: 'flex', gap: 4, padding: '6px 8px 0',
-        background: 'var(--cth-cream-100)', borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0
+        background: 'var(--cth-cream-100)', borderBottom: '1px solid var(--cth-ink-700)', flexShrink: 0,
+        overflowX: 'auto', flexWrap: 'nowrap'
       }}>
         {TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             style={{
+              flexShrink: 0, whiteSpace: 'nowrap',
               display: 'inline-flex', alignItems: 'center', gap: 4,
               padding: '4px 9px 3px', border: 'none', cursor: 'pointer',
               background: tab === t.key ? `var(--cth-${agent.accent})` : 'var(--cth-cream-200)',

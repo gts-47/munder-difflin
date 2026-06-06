@@ -37,6 +37,12 @@ button, input, textarea, select {
 /* Belt + suspenders for the caret: follow the ink, never the UA scheme. */
 input, textarea { caret-color: var(--cth-ink-900); }
 
+/* Command Center tab bar scrolls horizontally when it overflows a narrow
+   sidebar; hide the scrollbar (overlay on mac, hidden elsewhere) — scroll with
+   trackpad / Shift+wheel, like a browser tab strip. */
+.cth-tabbar { scrollbar-width: none; -ms-overflow-style: none; }
+.cth-tabbar::-webkit-scrollbar { height: 0; display: none; }
+
 /* Pixel-snapping for any rasterised content */
 canvas, img, svg { image-rendering: pixelated; image-rendering: crisp-edges; }
 
