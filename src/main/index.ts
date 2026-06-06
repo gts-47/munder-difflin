@@ -20,7 +20,7 @@ import { MemoryManager } from './memory';
 import { MemoryReflector, type ReflectSettings } from './reflect';
 import { PersistStore } from './db';
 import { enrichMessage } from './assistant';
-import { readAgentUsage } from './transcript';
+import { readAgentUsage, readContextTokens } from './transcript';
 import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer } from './slack';
 import { TelemetryCollector } from './telemetry';
@@ -961,6 +961,14 @@ ipcMain.handle('app:resetAll', () => {
 // bug #1 fixed in pricing.ts). Kept for back-compat with the existing UsageRow.
 ipcMain.handle('hive:agentUsage', (_evt, cwd: unknown) =>
   typeof cwd === 'string' ? readAgentUsage(cwd) : null);
+// Current context size (tokens) of an agent's LIVE session — the transcript
+// path is learned from the agent's hook payloads, so this works even when
+// several agents share one cwd. Null until the first hook fires.
+ipcMain.handle('hive:agentContext', (_evt, agentId: unknown) => {
+  if (typeof agentId !== 'string') return null;
+  const tp = hookServer.transcriptPath(agentId);
+  return tp ? readContextTokens(tp) : null;
+});
 
 // ─── IPC: live telemetry (the OTel collector — the locked usage-provider seam) ─
 // The fleet grid + span waterfall (#7B) read these; Lane A's breaker (#6)

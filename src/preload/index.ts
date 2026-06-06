@@ -393,6 +393,11 @@ const api = {
    *  Claude Code transcripts (reconciler/fallback). Returns null for an invalid cwd. */
   agentUsage: (cwd: string): Promise<AgentUsage | null> =>
     ipcRenderer.invoke('hive:agentUsage', cwd),
+  /** Current context size (tokens) of an agent's live session, read from the
+   *  last assistant message of its transcript. Null until the agent's hooks
+   *  have fired at least once (the transcript path is learned from them). */
+  agentContext: (agentId: string): Promise<number | null> =>
+    ipcRenderer.invoke('hive:agentContext', agentId),
 
   // ─── Live telemetry (OTel collector — the usage-provider seam + spans) ──────
   /** Live cumulative usage for an agent (OTel-preferred, transcript fallback). */

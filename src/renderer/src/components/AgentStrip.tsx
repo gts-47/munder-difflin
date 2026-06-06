@@ -91,6 +91,8 @@ export function AgentStrip({ config }: AgentStripProps) {
           project={a.project}
           action={a.action}
           progress={a.progress}
+          contextTokens={a.contextTokens}
+          contextLimit={a.contextLimit}
           selected={a.id === selectedId}
           isGod={a.isGod}
           isAssistant={a.isAssistant}
