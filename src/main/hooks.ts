@@ -16,6 +16,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { Notification, type WebContents } from 'electron';
 import type { HiveManager } from './hive';
 import type { HarnessConfig } from './config';
+import type { CircuitBreaker } from './breaker';
 
 interface HookPayload {
   hook_event_name?: string;
@@ -39,7 +40,10 @@ export class HookServer {
   constructor(
     private hive: HiveManager,
     private getWebContents: () => WebContents | null,
-    private getConfig: () => HarnessConfig
+    private getConfig: () => HarnessConfig,
+    /** Circuit breaker (Lane A #6.6b) — fed the hook-derived signals (session id,
+     *  repeated identical tool calls). Optional so the server still runs without it. */
+    private breaker?: CircuitBreaker
   ) {}
 
   start(): void {
@@ -76,6 +80,16 @@ export class HookServer {
   private handle(p: HookPayload): unknown {
     const agentId = p.agent_id ?? undefined;
     const event = p.hook_event_name ?? 'Unknown';
+
+    // Capture the Claude Code session id for idempotent --resume + cost dedup
+    // (Lane A #6.6a). Cheap: recordSession writes only when it changes.
+    if (agentId && p.session_id) this.hive.recordSession(agentId, p.session_id);
+
+    // Feed the breaker its hook-derived loop signal: a tool that actually ran.
+    // A repeated identical (name+input) PostToolUse is the runaway-loop tell.
+    if (event === 'PostToolUse' && agentId) {
+      this.breaker?.recordToolUse(agentId, p.tool_name, p.tool_input);
+    }
 
     if ((event === 'Stop' || event === 'SubagentStop') && agentId) {
       // Loop guard: a previous Stop hook already blocked this turn → let it stop.
