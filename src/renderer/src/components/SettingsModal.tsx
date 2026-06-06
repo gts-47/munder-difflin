@@ -54,6 +54,12 @@ function clearLocalState(): void {
 export function SettingsModal({ config, onClose }: SettingsModalProps) {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Change-home flow: null until the user picks a new folder, then the sub-modal
+  // confirms move-vs-fresh. Pre-selects 'move' (recommended — keeps the data).
+  const [changeHome, setChangeHome] = useState<string | null>(null);
+  const [changeMode, setChangeMode] = useState<'move' | 'fresh'>('move');
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeErr, setChangeErr] = useState('');
   // `notifications` is an optional field on the main-process config; the renderer
   // mirror type may not declare it yet, so read it defensively.
   const [notifications, setNotifications] = useState<boolean>(
@@ -130,8 +136,36 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
     await window.cth.resetAll();
   };
 
+  // ─── Change home folder ─────────────────────────────────────────────────────
+  /** Pick a new folder, then open the move-vs-fresh sub-modal. */
+  const pickNewHome = async () => {
+    setChangeErr('');
+    const res = await window.cth.chooseFolder();
+    if (!res.ok) return; // cancelled — no-op
+    setChangeMode('move'); // recommended default
+    setChangeHome(res.path);
+  };
+
+  /** Apply the home-folder change. On success the app relaunches (never resolves);
+   *  on failure we surface the error and the existing home keeps running. */
+  const applyChangeHome = async () => {
+    if (!changeHome) return;
+    setChangeBusy(true); setChangeErr('');
+    // Moving copies the hive (incl. its .git) + palace, so the new home owns the
+    // same renderer-side roster — keep localStorage. A 'fresh' home starts empty,
+    // so clear the renderer cache to match.
+    if (changeMode === 'fresh') clearLocalState();
+    try {
+      const res = await window.cth.changeHome(changeHome, changeMode);
+      if (!res.ok) { setChangeErr(res.error ?? 'Could not change the home folder.'); setChangeBusy(false); }
+      // ok === true never returns (the process relaunches).
+    } catch (e) {
+      setChangeErr(e instanceof Error ? e.message : String(e));
+      setChangeBusy(false);
+    }
+  };
+
   const rows: Array<[string, string]> = [
-    ['Home folder', config.harnessHome ?? '—'],
     ['Auto mode', config.autoMode ? 'on' : 'off'],
     ['Semantic memory', config.semanticMemory ? 'on' : 'off'],
     ['Command', config.defaultCommand]
@@ -148,9 +182,77 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
       }}
     >
       <div onClick={(e) => e.stopPropagation()} style={{ width: 520, maxWidth: '92vw' }}>
-        <PixelPanel variant="dialog" title={confirming ? 'RESET EVERYTHING?' : 'SETTINGS'} noPadding>
-          {!confirming ? (
+        <PixelPanel
+          variant="dialog"
+          title={changeHome ? 'CHANGE HOME FOLDER' : confirming ? 'RESET EVERYTHING?' : 'SETTINGS'}
+          noPadding
+        >
+          {changeHome ? (
             <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>New home folder</span>
+                <code style={{
+                  fontFamily: 'var(--cth-font-mono, monospace)', fontSize: 13,
+                  color: 'var(--cth-ink-900)', wordBreak: 'break-all'
+                }}>{changeHome}</code>
+              </div>
+
+              {/* Move vs. fresh — two selectable option rows; move is preselected. */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {([
+                  ['move', 'Move existing data (recommended)', 'Copy this harness’s hive (every agent, memory, task) and the semantic-memory palace into the new folder. The old folder is left untouched as a backup you can delete later.'],
+                  ['fresh', 'Start fresh', 'Point the harness at the new (empty) folder. Your existing data stays in the old folder, simply unused.']
+                ] as const).map(([value, title, desc]) => {
+                  const selected = changeMode === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setChangeMode(value)}
+                      disabled={changeBusy}
+                      style={{
+                        textAlign: 'left', cursor: changeBusy ? 'default' : 'pointer',
+                        padding: '10px 12px', background: 'var(--cth-paper-100)', border: 'none',
+                        boxShadow: `inset 0 0 0 ${selected ? 2 : 1}px ${selected ? 'var(--cth-ink-900)' : 'var(--cth-ink-300)'}`,
+                        display: 'flex', flexDirection: 'column', gap: 3
+                      }}
+                    >
+                      <span style={{
+                        fontSize: 14, lineHeight: '20px',
+                        color: 'var(--cth-ink-900)', fontWeight: selected ? 700 : 400
+                      }}>
+                        {selected ? '◉ ' : '○ '}{title}
+                      </span>
+                      <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>{desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {changeErr && (
+                <div style={{ fontSize: 13, lineHeight: '18px', color: '#6E1423' }}>{changeErr}</div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <PixelButton variant="secondary" size="md" onClick={() => { setChangeHome(null); setChangeErr(''); }} disabled={changeBusy}>
+                  cancel
+                </PixelButton>
+                <PixelButton variant="primary" size="md" onClick={applyChangeHome} disabled={changeBusy}>
+                  {changeBusy ? 'applying…' : (changeMode === 'move' ? 'move & restart' : 'switch & restart')}
+                </PixelButton>
+              </div>
+            </div>
+          ) : !confirming ? (
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Home folder — a dedicated row so it can carry a Change… action. */}
+              <div style={{ display: 'flex', gap: 12, fontSize: 14, lineHeight: '20px', alignItems: 'center' }}>
+                <span style={{ width: 140, flexShrink: 0, color: 'var(--cth-ink-500)' }}>Home folder</span>
+                <span style={{
+                  flex: 1, color: 'var(--cth-ink-900)', wordBreak: 'break-all',
+                  fontFamily: 'var(--cth-font-mono, monospace)'
+                }}>{config.harnessHome ?? '—'}</span>
+                <PixelButton variant="secondary" size="sm" onClick={pickNewHome}>change…</PixelButton>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {rows.map(([label, value]) => (
                   <div key={label} style={{ display: 'flex', gap: 12, fontSize: 14, lineHeight: '20px' }}>

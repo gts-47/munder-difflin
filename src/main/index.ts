@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron';
 import { spawn } from 'node:child_process';
-import { rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync, readdirSync, cpSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import { PtyManager, type SpawnOptions } from './pty';
 import {
@@ -414,6 +414,71 @@ ipcMain.handle('config:ensureHome', (_evt, path: unknown) => {
   return ensureHarnessHome(path);
 });
 
+// Change the harnessHome folder. Because every derived path (hive root, palace,
+// sock, agent dirs) resolves lazily through getHome(), the only real work is
+// optionally MOVING the existing hive + palace and relaunching so every service
+// re-binds against the new root. mode: 'move' copies the data (old kept as a
+// safety net), 'fresh' just re-points and bootstraps an empty home.
+ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
+  const p = (payload ?? {}) as { newHome?: unknown; mode?: unknown };
+  if (typeof p.newHome !== 'string' || !p.newHome) return { ok: false, error: 'invalid newHome' };
+  const mode: 'move' | 'fresh' = p.mode === 'fresh' ? 'fresh' : 'move';
+  const newHome = resolve(p.newHome);
+  const oldRaw = readConfig().harnessHome;
+  const oldHome = oldRaw ? resolve(oldRaw) : null;
+
+  // Guard against same-folder / nested-folder (a move would self-copy forever).
+  if (oldHome) {
+    if (newHome === oldHome) return { ok: false, error: 'That is already the current home folder.' };
+    const a = newHome + sep, b = oldHome + sep;
+    if (a.startsWith(b) || b.startsWith(a)) {
+      return { ok: false, error: 'Pick a folder that is not inside (or a parent of) the current home.' };
+    }
+  }
+
+  const ensured = ensureHarnessHome(newHome);
+  if (!ensured.ok) return ensured;
+
+  // Tear down everything bound to the OLD root before copying, so nothing writes
+  // mid-copy — a live git commit into hive/.git would otherwise be copied as a
+  // half-written object and corrupt the moved repo.
+  try { clearMissionTimers(); } catch (e) { console.error('[changeHome] clearMissionTimers:', e); }
+  try { hive.stopRouter(); } catch (e) { console.error('[changeHome] stopRouter:', e); }
+  try { hookServer.stop(); } catch (e) { console.error('[changeHome] hookServer.stop:', e); }
+  try { stopSlackServer(); } catch (e) { console.error('[changeHome] slack.stop:', e); }
+  try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
+  try { reflector.stop(); } catch (e) { console.error('[changeHome] reflector.stop:', e); }
+
+  if (mode === 'move' && oldHome) {
+    try {
+      for (const sub of ['hive', 'palace']) {
+        const src = join(oldHome, sub);
+        if (!existsSync(src)) continue;
+        // cpSync copies the whole tree incl. .git and is cross-device safe (unlike
+        // renameSync, which throws EXDEV across volumes). We COPY, never delete —
+        // the old folder stays as a safety net the user removes manually.
+        cpSync(src, join(newHome, sub), { recursive: true, force: true, dereference: false });
+      }
+    } catch (e) {
+      // Copy failed: recover IN PLACE against the unchanged old home (config never
+      // repointed) so the user loses nothing, and surface the error — no relaunch.
+      bootstrapHiveServices();
+      const cfg = readConfig();
+      if (cfg.slackEnabled && cfg.slackSigningSecret) void startSlackServer();
+      return { ok: false, error: `Could not copy data: ${e instanceof Error ? e.message : String(e)}` };
+    }
+  }
+
+  // Repoint config and relaunch so every service re-bootstraps against newHome.
+  // (Identical recovery path to resetAll — relaunch is the clean re-bind.)
+  allowQuit = true;
+  writeConfig({ harnessHome: newHome });
+  try { ptyManager.killAll(); } catch (e) { console.error('[changeHome] killAll:', e); }
+  app.relaunch();
+  app.exit(0);
+  return { ok: true as const }; // unreachable (process exits) — typed for the renderer
+});
+
 // ─── IPC: filesystem (sandboxed to a root) ──────────────────────────────────
 ipcMain.handle('fs:listDir', (_evt, root: unknown, rel: unknown) => {
   if (typeof root !== 'string' || typeof rel !== 'string') return { ok: false, error: 'invalid args' };
@@ -657,17 +722,23 @@ ipcMain.handle('slack:setConfig', (_evt, patch: unknown) => {
   return { ok: true };
 });
 
+/** Start every hive-bound background service against the current harnessHome.
+ *  Called on boot, and again to recover in place if a folder-change copy fails
+ *  (config:changeHome tears these down before copying). No-op without a home. */
+function bootstrapHiveServices(): void {
+  if (!hive.enabled()) return;
+  hive.ensureHive();
+  hive.startRouter();
+  ensureDefaultMissions(); // one-time: seed the built-in hourly ops standup
+  syncMissions(); // arm recurring auto-dispatch missions now the router is live
+  hookServer.start();
+  memory.start(); // init shared palace + mine loop (no-op without mempalace)
+  reflector.start(); // bound oversized memory.md files on a timer (no-op until threshold)
+}
+
 app.whenReady().then(() => {
   // Bootstrap the hive (if harnessHome is configured) and start the message router.
-  if (hive.enabled()) {
-    hive.ensureHive();
-    hive.startRouter();
-    ensureDefaultMissions(); // one-time: seed the built-in hourly ops standup
-    syncMissions(); // arm recurring auto-dispatch missions now the router is live
-    hookServer.start();
-    memory.start(); // init shared palace + mine loop (no-op without mempalace)
-    reflector.start(); // bound oversized memory.md files on a timer (no-op until threshold)
-  }
+  bootstrapHiveServices();
   createWindow();
   // Auto-start the Slack webhook server when configured. Best-effort: a tunnel
   // failure (offline) is logged, not fatal. The tunnel URL is ephemeral and

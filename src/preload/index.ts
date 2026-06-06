@@ -201,6 +201,12 @@ const api = {
     ipcRenderer.invoke('config:update', patch),
   ensureHarnessHome: (path: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('config:ensureHome', path),
+  /** Change the harness home folder. 'move' copies the existing hive + palace
+   *  into the new folder (old kept as a safety net); 'fresh' just re-points and
+   *  bootstraps an empty home. On success the app relaunches (never resolves);
+   *  on failure (e.g. copy error) returns { ok: false, error }. */
+  changeHome: (newHome: string, mode: 'move' | 'fresh'): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('config:changeHome', { newHome, mode }),
 
   // ─── Filesystem (sandboxed to cwd) ───────────────────────────────────────
   listDir: (root: string, rel: string): Promise<
