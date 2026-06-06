@@ -96,6 +96,10 @@ export function useHive(config: HarnessConfig | null): void {
   const assistantSpawning = useRef(false);
   // Reactive so the assistant bootstrap (effect #1b) re-runs once Michael is ready.
   const godStatus = useStore((s) => s.godStatus);
+  // #5C/#7C.4 — latest circuit-breaker level per agent. When 'constrained'/
+  // 'stopped' the avatar is pinned to 'looping' and hook events must NOT flip it
+  // back to 'working' (the flicker the spec calls out); only a genuine Stop clears it.
+  const breakerLevel = useRef<Record<string, string>>({});
 
   // 1) Bootstrap the god agent (source of truth = live PTYs, to dodge restarts).
   useEffect(() => {
@@ -228,25 +232,36 @@ export function useHive(config: HarnessConfig | null): void {
       const { updateAgent, agents } = useStore.getState();
       const self = agents.find((a) => a.id === e.agentId);
       if (!self) return;
+      // Breaker precedence (#5C): a constrained/stopped agent stays 'looping'
+      // regardless of in-flight tool/prompt/compact events.
+      const blevel = breakerLevel.current[e.agentId];
+      const breakerArmed = blevel === 'constrained' || blevel === 'stopped';
       // Hook events are the authoritative status source for real agents (the
       // pty-stream parser only refines the on-floor action/station).
-      if (e.event === 'PreToolUse' && e.tool) {
+      if (e.event === 'PreCompact') {
+        // #5C — agent entered /compact; show it's boxing up context, not frozen.
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'compacting', action: 'compacting context', carrying: undefined });
+      } else if (e.event === 'PostCompact') {
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'working', action: 'resumed', carrying: undefined });
+      } else if (e.event === 'PreToolUse' && e.tool) {
         const m = stationForTool(e.tool);
-        updateAgent(e.agentId, { status: 'working', currentStation: m.station, carrying: m.carry, action: `using ${e.tool}` });
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'working', currentStation: m.station, carrying: m.carry, action: `using ${e.tool}` });
         useStore.getState().bumpToolCount(e.agentId); // usage proxy for the command center
       } else if (e.event === 'PostToolUse' || e.event === 'UserPromptSubmit') {
         // A turn is in progress (prompt submitted / tool just finished) — keep
         // it working so it doesn't flicker idle between tool calls.
-        updateAgent(e.agentId, { status: 'working' });
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'working' });
       } else if (e.event === 'Stop' || e.event === 'SubagentStop') {
         // A blocked Stop means the agent is being re-engaged to process its
         // inbox — it's NOT idle, so keep it working until it genuinely stops.
         if (e.blocked) {
-          updateAgent(e.agentId, { status: 'working', action: 'reading inbox', carrying: undefined });
+          if (!breakerArmed) updateAgent(e.agentId, { status: 'working', action: 'reading inbox', carrying: undefined });
         } else {
+          // A genuine stop clears any breaker override — the run is over.
+          breakerLevel.current[e.agentId] = 'healthy';
           updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined });
         }
-      } else if (e.event === 'Notification') {
+      } else if (e.event === 'Notification' && !breakerArmed) {
         // Claude Code fires Notification for two very different situations:
         //   1. it genuinely needs the human (a permission / approval prompt), or
         //   2. the prompt has merely gone idle ("Claude is waiting for your
@@ -272,6 +287,22 @@ export function useHive(config: HarnessConfig | null): void {
           updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined });
         }
       }
+    });
+  }, []);
+
+  // 2b) Consume circuit-breaker state (#7C.4/#5C). Lane A's breaker policy (#6)
+  //     pushes BreakerState on `control:breakerState`; this gives it PRECEDENCE
+  //     over hook-derived status: a constrained/stopped agent is pinned to
+  //     'looping' (see the breakerArmed guard above) until it genuinely Stops.
+  useEffect(() => {
+    return window.cth.onBreakerState((s) => {
+      breakerLevel.current[s.agentId] = s.level;
+      const { updateAgent, agents } = useStore.getState();
+      if (!agents.some((a) => a.id === s.agentId)) return;
+      if (s.level === 'constrained' || s.level === 'stopped') {
+        updateAgent(s.agentId, { status: 'looping', action: s.reason || 'breaker armed', carrying: undefined });
+      }
+      // 'healthy'/'steering' clear the pin; the next hook event refreshes status.
     });
   }, []);
 
