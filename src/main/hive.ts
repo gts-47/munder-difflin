@@ -24,6 +24,7 @@ import {
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
+import type { AgentUsageSample } from './usage';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,11 @@ export interface RegistryAgent extends AgentMeta {
    *  (not deleted) so its history/memory survive; only agents with a live PTY
    *  are 'active'. Broadcast fan-out + roster reads skip archived agents. */
   archived?: boolean;
+  /** Most recent Claude Code session_id seen for this agent (Lane A #6.6a),
+   *  captured from hook payloads. Doubles as the `--resume` key (idempotent
+   *  resume after a crash/restart) AND the cost accounting/dedup key on every
+   *  AgentUsageSample / cost-ledger row. */
+  sessionId?: string;
 }
 
 export interface Registry {
@@ -284,6 +290,34 @@ export class HiveManager {
       this.appendLog({ kind: 'archive', agentId: id, archived });
       this.commit(`hive: ${archived ? 'archive' : 'unarchive'} ${id}`);
     } catch { /* best-effort — never crash a lifecycle handler */ }
+  }
+
+  /**
+   * Persist the agent's Claude Code session_id (Lane A #6.6a). Captured from hook
+   * payloads; written only when it actually changes (a new session), so this is a
+   * no-op on the vast majority of hook events. The id is the `--resume` key for
+   * idempotent resume after a crash/restart AND the accounting/dedup key for cost
+   * samples. Best-effort — never throws into a hook handler.
+   */
+  recordSession(agentId: string, sessionId: string): void {
+    const root = this.root();
+    if (!root || !sessionId) return;
+    try {
+      const reg = this.registry();
+      const agent = reg.agents[agentId];
+      if (!agent || agent.sessionId === sessionId) return; // unknown agent or unchanged → no write
+      agent.sessionId = sessionId;
+      agent.lastSeen = Date.now();
+      this.writeJson(join(root, 'registry.json'), reg);
+      this.appendLog({ kind: 'session', agentId, sessionId });
+      this.commit(`hive: session ${agentId}`);
+    } catch { /* best-effort — never crash a hook handler */ }
+  }
+
+  /** The last known session_id for an agent, or undefined. Used to build a
+   *  `claude --resume <id>` spawn so a restarted agent resumes its thread. */
+  lastSession(agentId: string): string | undefined {
+    return this.registry().agents[agentId]?.sessionId;
   }
 
   /** Claude Code settings that route every relevant hook through the shim. */
@@ -558,6 +592,39 @@ export class HiveManager {
     if (!root) return;
     const line = JSON.stringify({ ts: Date.now(), ...event }) + '\n';
     try { appendFileSync(join(root, 'log.jsonl'), line, 'utf8'); } catch { /* noop */ }
+  }
+
+  /**
+   * Append one cost sample to the durable, append-only ledger at
+   * `<root>/cost-ledger.jsonl` (Lane A #6.6d). This is the SOLE durable cost
+   * store; its row is exactly the shape Kevin (#4) reserves for the cost_ledger
+   * SQLite table, so migration is a mechanical INSERT…SELECT.
+   *
+   * 🔒 PII: persist ONLY the allowlisted AgentUsageSample — NEVER a raw OTel
+   * record (those carry user.email / account / org / hashed-user-id). The sample
+   * is PII-free by construction upstream (the provider's normalize step), so we
+   * add no redaction here; we just must not widen what we write. The file lives
+   * at the hive ROOT, so `mempalace mine` (which only scans per-agent dirs) never
+   * ingests it — no palace noise, no MINE_IGNORE entry needed.
+   *
+   * Like appendLog: append to disk now (durable immediately), let it ride the
+   * next natural commit. Best-effort — never throws into the beat.
+   */
+  appendCostLedger(sample: AgentUsageSample): void {
+    const root = this.root();
+    if (!root) return;
+    const row = {
+      agent_id: sample.agentId,
+      session_id: sample.sessionId,
+      ts: sample.ts,
+      input: sample.input,
+      output: sample.output,
+      cacheRead: sample.cacheRead,
+      cacheCreation: sample.cacheCreation,
+      model: sample.model,
+      usd: sample.usd
+    };
+    try { appendFileSync(join(root, 'cost-ledger.jsonl'), JSON.stringify(row) + '\n', 'utf8'); } catch { /* noop */ }
   }
 
   // — json + atomic io —
