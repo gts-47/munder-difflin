@@ -254,7 +254,7 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
               </div>
             </Row>}
 
-            <Row label={config.autoMode ? 'Command (auto mode on)' : 'Command'}>
+            <Row label={config.autoMode && isClaudeProvider(provider) ? 'Command (auto mode on)' : 'Command'}>
               <input
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}

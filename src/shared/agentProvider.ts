@@ -4,13 +4,12 @@ export interface AgentProviderPreset {
   id: AgentProvider;
   label: string;
   defaultCommand: string;
-  supportsModels: boolean;
 }
 
 export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
-  { id: 'claude', label: 'Claude Code', defaultCommand: 'claude', supportsModels: true },
-  { id: 'codex', label: 'Codex', defaultCommand: 'codex', supportsModels: false },
-  { id: 'custom', label: 'Custom', defaultCommand: '', supportsModels: false }
+  { id: 'claude', label: 'Claude Code', defaultCommand: 'claude' },
+  { id: 'codex', label: 'Codex', defaultCommand: 'codex' },
+  { id: 'custom', label: 'Custom', defaultCommand: '' }
 ];
 
 export function isAgentProvider(value: unknown): value is AgentProvider {

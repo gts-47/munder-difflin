@@ -536,12 +536,20 @@ export class HiveManager {
     const resolveTo = (to: string): string => (to === 'human' || to === 'god' ? godId : to);
     const targets = msg.to === 'broadcast'
       // The roster for fan-out is the ACTIVE registry: skip the send-only prep
-      // assistant and any archived agent (closed tab) so mail never piles into a
-      // dead inbox no one will read.
-      ? Object.keys(reg.agents).filter((a) => a !== msg.from && !reg.agents[a]?.isAssistant && !reg.agents[a]?.archived)
+      // assistant, non-Claude providers without hook/protocol support, and any
+      // archived agent (closed tab) so mail never piles into a dead inbox no one
+      // will read.
+      ? Object.keys(reg.agents).filter((a) => {
+        const agent = reg.agents[a];
+        return a !== msg.from
+          && !agent?.isAssistant
+          && !agent?.archived
+          && isClaudeProvider(agent?.provider ?? 'claude');
+      })
       // Never deliver to self — guards a god → "human" message looping back to god.
       : [resolveTo(msg.to)].filter((t) => t !== msg.from);
     for (const t of targets) {
+      const target = reg.agents[t];
       // Enforce the assistant's send-only contract AT THE ROUTER: it has no
       // composer, is excluded from the inbox-wake nudge, and never reads an
       // inbox — yet direct mail used to be delivered there anyway, where it
@@ -549,11 +557,19 @@ export class HiveManager {
       // reprimand about the unread inbox, both unread for hours). Bounce such
       // mail to god instead, so the sender's intent surfaces immediately and
       // nothing is silently lost.
-      if (reg.agents[t]?.isAssistant) {
+      if (target?.isAssistant) {
         this.deliver({
           ...msg,
           to: godId,
           subject: `[bounced — "${t}" is the send-only prep assistant; route work to a real agent] ${msg.subject}`
+        }, godId);
+        continue;
+      }
+      if (target && !isClaudeProvider(target.provider ?? 'claude')) {
+        this.deliver({
+          ...msg,
+          to: godId,
+          subject: `[bounced — "${t}" uses ${target.provider ?? 'custom'}; route via its terminal, not hive inbox] ${msg.subject}`
         }, godId);
         continue;
       }

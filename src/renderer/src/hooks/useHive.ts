@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { useStore, type Agent, type StationKind, type ToolKind } from '@/store/store';
-import { buildSpawnCommand, ASSISTANT_MODEL, type HarnessConfig } from '@/store/config';
+import {
+  buildSpawnCommand,
+  ASSISTANT_MODEL,
+  inferAgentProvider,
+  isClaudeProvider,
+  type HarnessConfig
+} from '@/store/config';
 
 const GOD_ID = 'god';
 const GOD_PTY = `pty-${GOD_ID}`;
@@ -521,6 +527,7 @@ export function useHive(config: HarnessConfig | null): void {
       const { agents, messageQueues, enqueueMessage } = useStore.getState();
       for (const a of agents) {
         if (!a.ptyId) continue;
+        if (!isClaudeProvider(inferAgentProvider(a.command, a.provider))) continue;
         const queued = messageQueues[a.id] ?? [];
         if (queued.some((m) => m.text.trimStart().startsWith('/compact'))) continue;
         enqueueMessage(a.id, COMPACT_CMD);
