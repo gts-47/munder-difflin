@@ -46,6 +46,9 @@ export interface HiveTask {
   result?: string;
   /** Origin thread for a Slack-sourced task (drives the done-summary reply). */
   slack?: { channel: string; thread_ts: string };
+  /** SHA-256 of the capability token for a generic-webhook-sourced task (drives
+   *  the GET status lookup; the raw token is never persisted). */
+  webhook?: { tokenHash: string };
 }
 
 /** A message the router just delivered, with its resolved recipient ids. Drives
@@ -120,6 +123,9 @@ export interface HarnessConfig {
   slackBotToken?: string;
   slackChannelId?: string;
   slackPort?: number;
+  webhookEnabled?: boolean;
+  webhookSecret?: string;
+  webhookPort?: number;
   costCapUsd?: number;
   costCapTokens?: number;
   agentTokenCaps?: Record<string, number>;
@@ -547,7 +553,27 @@ const api = {
   slackSetConfig: (patch: {
     signingSecret?: string; botToken?: string; channelId?: string; port?: number; enabled?: boolean;
   }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('slack:setConfig', patch)
+    ipcRenderer.invoke('slack:setConfig', patch),
+
+  // ─── Generic webhook + status API (POST → work, GET → status) ────────────────
+  /** Start the generic webhook server; returns the public endpoint URL callers
+   *  POST to (secret-gated) and GET a token's status from. */
+  webhookStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
+    ipcRenderer.invoke('webhook:start'),
+  /** Stop the generic webhook server + tunnel. */
+  webhookStop: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('webhook:stop'),
+  /** Current state + last endpoint URL (so Settings can hydrate the badge/URL). */
+  webhookStatus: (): Promise<{ running: boolean; url?: string }> =>
+    ipcRenderer.invoke('webhook:status'),
+  /** Mint + persist a fresh secret and return it for the user to copy. */
+  webhookGenerateSecret: (): Promise<{ ok: boolean; secret?: string }> =>
+    ipcRenderer.invoke('webhook:generateSecret'),
+  /** Persist webhook settings (and stop the server if disabled / secret cleared). */
+  webhookSetConfig: (patch: {
+    secret?: string; port?: number; enabled?: boolean;
+  }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('webhook:setConfig', patch)
 };
 
 contextBridge.exposeInMainWorld('cth', api);

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { spawn } from 'node:child_process';
 import { rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync, unlinkSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import { join, resolve, sep } from 'node:path';
 import { PtyManager, type SpawnOptions } from './pty';
 import {
@@ -24,6 +24,7 @@ import { enrichMessage } from './assistant';
 import { readAgentUsage, readContextTokens } from './transcript';
 import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer, SlackReplyServer, postSlackReply } from './slack';
+import { WebhookServer, type WebhookInbound, type WebhookTaskStatus } from './webhook';
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
 
@@ -692,6 +693,124 @@ function stopSlackServer(): void {
   try { if (existsSync(slackReplyConfigPath())) unlinkSync(slackReplyConfigPath()); } catch { /* noop */ }
 }
 
+// ─── Generic inbound webhook + status API ────────────────────────────────────
+/** The running generic-webhook server, or null when disabled/stopped. A PUBLIC
+ *  (tunnel-forwarded) surface — secret-gated, unlike the loopback /reply. */
+let webhookServer: WebhookServer | null = null;
+/** Last public tunnel URL handed out — persisted so Settings can re-show the
+ *  endpoint after a reopen (loca.lt rotates it per restart). */
+let lastWebhookUrl: string | undefined;
+
+/** SHA-256 hex of a capability token. The raw token is returned to the caller
+ *  exactly once (the POST response) and never persisted; only this digest lands
+ *  on the kanban card, so a GET can match without the raw token ever resting. */
+function hashWebhookToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+/** Turn a verified webhook POST into hive work: create ONE stamped kanban card
+ *  (origin + token hash) and route the message to god/Michael's inbox as a
+ *  request. Returns the raw capability token + card id to hand back to the caller
+ *  (the ONLY echo of the token). The secret never reaches here. Returns null only
+ *  if the card — the thing the caller will poll — could not be created. */
+function handleWebhookMessage(msg: WebhookInbound): { token: string; taskId: string } | null {
+  // 192-bit unguessable token, returned once; only its hash is stored.
+  const token = randomBytes(24).toString('hex');
+  const taskId = `webhook-${randomBytes(8).toString('hex')}`;
+  const full = msg.title ?? msg.message;
+  const title = full.length > 80 ? `${full.slice(0, 79)}…` : full;
+
+  // 1) Create the stamped card. This is the critical step — the caller's token is
+  //    only useful if a card exists to poll, so a failure here fails the POST.
+  try {
+    const ledger = hive.tasks() as { tasks?: HiveTask[] };
+    const existing = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+    const card: HiveTask = {
+      id: taskId,
+      title,
+      description: msg.message,
+      status: 'todo',
+      dependsOn: [],
+      priority: 1,
+      createdAt: new Date().toISOString(),
+      webhook: { tokenHash: hashWebhookToken(token) }
+    };
+    hive.writeTasks([...existing, card]);
+  } catch (e) {
+    console.error('[webhook] could not create task card:', e instanceof Error ? e.message : e);
+    return null;
+  }
+
+  // 2) Route the work to god/Michael (god inbox request). Body carries ONLY the
+  //    user message + the card id (so whoever finishes it updates that card's
+  //    status/result for the caller's GET) — never the secret or the raw token.
+  //    Best-effort: the card already exists and is pollable even if this hiccups.
+  try {
+    hive.send({
+      to: 'god',
+      act: 'request',
+      subject: `[webhook] ${title}`,
+      body: `${msg.message}\n\n(Inbound via the generic webhook API, tracked as kanban card ${taskId}. When this work is finished, set that card's status to 'done' and fill its 'result' so the caller's status check reflects the outcome.)`,
+      requires_reply: false
+    }, 'webhook');
+  } catch (e) {
+    console.error('[webhook] could not route to god:', e instanceof Error ? e.message : e);
+  }
+  return { token, taskId };
+}
+
+/** Resolve a capability token to its task's public status — scoped to the ONE
+ *  card whose stored hash matches; never lists or leaks any other task. Returns
+ *  null for any non-match (the server answers 404 either way, so a probe can't
+ *  tell "unknown" from "malformed"). */
+function lookupWebhookStatus(token: string): WebhookTaskStatus | null {
+  const wanted = Buffer.from(hashWebhookToken(token));
+  let tasks: HiveTask[];
+  try {
+    const ledger = hive.tasks() as { tasks?: HiveTask[] };
+    tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+  } catch { return null; }
+  for (const t of tasks) {
+    const h = t.webhook?.tokenHash;
+    if (!h) continue;
+    const have = Buffer.from(h);
+    // Both are fixed-length sha-256 hex; compare in constant time defensively.
+    if (have.length === wanted.length && timingSafeEqual(have, wanted)) {
+      return { status: t.status, title: t.title, result: t.result };
+    }
+  }
+  return null;
+}
+
+/** Build a WebhookServer from the current config and start it, replacing any
+ *  running instance. No-op + error when disabled or the secret is unset. The
+ *  public tunnel is opened only here — never on a default; it stays opt-in
+ *  (user enables + presses Start in Settings). */
+async function startWebhookServer(): Promise<{ ok: boolean; url?: string; error?: string }> {
+  const cfg = readConfig();
+  if (!cfg.webhookEnabled || !cfg.webhookSecret) {
+    return { ok: false, error: 'webhook disabled or missing secret' };
+  }
+  webhookServer?.stop();
+  webhookServer = new WebhookServer({
+    port: cfg.webhookPort && cfg.webhookPort > 0 ? cfg.webhookPort : 3849,
+    secret: cfg.webhookSecret,
+    onMessage: handleWebhookMessage,
+    lookupStatus: lookupWebhookStatus
+  });
+  const res = await webhookServer.start();
+  if (!res.ok) { webhookServer = null; return res; }
+  if (res.url) lastWebhookUrl = res.url;
+  return res;
+}
+
+/** Stop and forget the webhook server. Best-effort; safe when not running. The
+ *  last tunnel URL is retained so Settings keeps showing it. */
+function stopWebhookServer(): void {
+  try { webhookServer?.stop(); } catch (e) { console.error('[webhook] stop failed:', e); }
+  webhookServer = null;
+}
+
 /** The persisted main-window geometry (kv key `window.bounds`). */
 interface WindowBounds { x?: number; y?: number; width: number; height: number }
 
@@ -985,6 +1104,7 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
   try { hive.stopRouter(); } catch (e) { console.error('[changeHome] stopRouter:', e); }
   try { hookServer.stop(); } catch (e) { console.error('[changeHome] hookServer.stop:', e); }
   try { stopSlackServer(); } catch (e) { console.error('[changeHome] slack.stop:', e); }
+  try { stopWebhookServer(); } catch (e) { console.error('[changeHome] webhook.stop:', e); }
   try { memory.stop(); } catch (e) { console.error('[changeHome] memory.stop:', e); }
   try { reflector.stop(); } catch (e) { console.error('[changeHome] reflector.stop:', e); }
 
@@ -1004,6 +1124,7 @@ ipcMain.handle('config:changeHome', async (_evt, payload: unknown) => {
       bootstrapHiveServices();
       const cfg = readConfig();
       if (cfg.slackEnabled && cfg.slackSigningSecret) void startSlackServer();
+      if (cfg.webhookEnabled && cfg.webhookSecret) void startWebhookServer();
       return { ok: false, error: `Could not copy data: ${e instanceof Error ? e.message : String(e)}` };
     }
   }
@@ -1358,6 +1479,33 @@ ipcMain.handle('slack:setConfig', (_evt, patch: unknown) => {
   return { ok: true };
 });
 
+// ─── IPC: Generic webhook + status API ──────────────────────────────────────
+ipcMain.handle('webhook:start', () => startWebhookServer());
+ipcMain.handle('webhook:stop', () => { stopWebhookServer(); return { ok: true }; });
+/** Current state + last public endpoint URL, for the Settings badge/URL field. */
+ipcMain.handle('webhook:status', () => ({ running: webhookServer != null, url: lastWebhookUrl }));
+/** Mint a strong (256-bit) secret, persist it, and return it so Settings can show
+ *  it for the user to copy into their client. The previous secret is replaced. */
+ipcMain.handle('webhook:generateSecret', () => {
+  const secret = randomBytes(32).toString('hex');
+  writeConfig({ webhookSecret: secret });
+  return { ok: true, secret };
+});
+ipcMain.handle('webhook:setConfig', (_evt, patch: unknown) => {
+  const p = (patch ?? {}) as { secret?: unknown; port?: unknown; enabled?: unknown };
+  const next: Partial<HarnessConfig> = {};
+  if (typeof p.secret === 'string') next.webhookSecret = p.secret.trim() || undefined;
+  if (typeof p.port === 'number' && Number.isFinite(p.port)) next.webhookPort = p.port;
+  if (typeof p.enabled === 'boolean') next.webhookEnabled = p.enabled;
+  writeConfig(next);
+  // Disabling (or clearing the secret) stops the public surface immediately. As
+  // with Slack we do NOT auto-(re)start — the user presses Start to open the
+  // tunnel and fetch the fresh endpoint URL.
+  const cfg = readConfig();
+  if (!cfg.webhookEnabled || !cfg.webhookSecret) stopWebhookServer();
+  return { ok: true };
+});
+
 /** Start every hive-bound background service against the current harnessHome.
  *  Called on boot, and again to recover in place if a folder-change copy fails
  *  (config:changeHome tears these down before copying). No-op without a home. */
@@ -1410,6 +1558,14 @@ app.whenReady().then(() => {
     void startSlackServer().then((r) => {
       if (!r.ok) console.error('[slack] auto-start failed:', r.error);
       else console.log('[slack] webhook listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
+    });
+  }
+  // Auto-start the generic webhook only when the user has explicitly enabled it
+  // AND a secret exists — never a default-on public surface. Opt-in, like Slack.
+  if (slackCfg.webhookEnabled && slackCfg.webhookSecret) {
+    void startWebhookServer().then((r) => {
+      if (!r.ok) console.error('[webhook] auto-start failed:', r.error);
+      else console.log('[webhook] listening', r.url ? `(tunnel: ${r.url})` : '(no tunnel)');
     });
   }
   app.on('activate', () => {
