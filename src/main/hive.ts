@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AgentUsageSample } from './usage';
 import { COMMAND_GROUPS } from '../shared/claudeCommands';
+import { isClaudeProvider, type AgentProvider } from '../shared/agentProvider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@ export interface HiveTask {
 export interface AgentMeta {
   id: string;
   name: string;
+  provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
   cwd: string;
@@ -101,7 +103,7 @@ export interface Registry {
   agents: Record<string, RegistryAgent>;
 }
 
-/** Build env + extra spawn args that make a `claude` process hive-aware. */
+/** Build env + extra spawn args that make an agent process hive-aware. */
 export interface SpawnInjection {
   args: string[];
   env: Record<string, string>;
@@ -251,7 +253,7 @@ export class HiveManager {
 
   /**
    * Ensure an agent's workspace + registry entry, returning the spawn injection
-   * (extra `claude` args + env) that makes the process hive-aware.
+   * (provider-specific args + env) that makes the process hive-aware.
    */
   ensureAgent(meta: AgentMeta, opts: { semanticMemory?: boolean; theme?: 'light' | 'dark' } = {}): SpawnInjection {
     const root = this.root();
@@ -297,14 +299,13 @@ export class HiveManager {
       AGENT_DIR: dir
     };
 
+    const claudeProvider = isClaudeProvider(meta.provider ?? 'claude');
+
     // Stage 7A — first-party Claude Code telemetry → the embedded loopback OTLP
     // collector (telemetry.ts). Pure env, no --settings change. Only injected
-    // once the collector is up (otelEndpoint set), so telemetry-off installs and
-    // tests spawn exactly as before. http/json (no protobuf dep). The resource
-    // attrs are the agent↔event join key the collector reads. NOTE: Claude Code
-    // reads these at process start, so they apply only to NEW spawns — an agent
-    // already running won't emit until respawned.
-    if (this._otelEndpoint) {
+    // for Claude Code once the collector is up (otelEndpoint set), so telemetry-
+    // off installs and non-Claude providers spawn exactly as before.
+    if (claudeProvider && this._otelEndpoint) {
       env.CLAUDE_CODE_ENABLE_TELEMETRY = '1';
       env.OTEL_METRICS_EXPORTER = 'otlp';
       env.OTEL_LOGS_EXPORTER = 'otlp';
@@ -314,7 +315,10 @@ export class HiveManager {
       env.OTEL_LOGS_EXPORT_INTERVAL = '2000';
       env.OTEL_RESOURCE_ATTRIBUTES = `agent.id=${meta.id},agent.name=${meta.name}`;
     }
-    const args = ['--append-system-prompt', this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false)];
+    const args: string[] = [];
+    if (!claudeProvider) return { args, env };
+
+    args.push('--append-system-prompt', this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false));
 
     // Phase 1 — autonomy: attach lifecycle hooks via --settings (no edits to the
     // user's repo) so the agent reports activity and drains its inbox on Stop.
@@ -545,12 +549,20 @@ export class HiveManager {
     const resolveTo = (to: string): string => (to === 'human' || to === 'god' ? godId : to);
     const targets = msg.to === 'broadcast'
       // The roster for fan-out is the ACTIVE registry: skip the send-only prep
-      // assistant and any archived agent (closed tab) so mail never piles into a
-      // dead inbox no one will read.
-      ? Object.keys(reg.agents).filter((a) => a !== msg.from && !reg.agents[a]?.isAssistant && !reg.agents[a]?.archived)
+      // assistant, non-Claude providers without hook/protocol support, and any
+      // archived agent (closed tab) so mail never piles into a dead inbox no one
+      // will read.
+      ? Object.keys(reg.agents).filter((a) => {
+        const agent = reg.agents[a];
+        return a !== msg.from
+          && !agent?.isAssistant
+          && !agent?.archived
+          && isClaudeProvider(agent?.provider ?? 'claude');
+      })
       // Never deliver to self — guards a god → "human" message looping back to god.
       : [resolveTo(msg.to)].filter((t) => t !== msg.from);
     for (const t of targets) {
+      const target = reg.agents[t];
       // Enforce the assistant's send-only contract AT THE ROUTER: it has no
       // composer, is excluded from the inbox-wake nudge, and never reads an
       // inbox — yet direct mail used to be delivered there anyway, where it
@@ -558,11 +570,19 @@ export class HiveManager {
       // reprimand about the unread inbox, both unread for hours). Bounce such
       // mail to god instead, so the sender's intent surfaces immediately and
       // nothing is silently lost.
-      if (reg.agents[t]?.isAssistant) {
+      if (target?.isAssistant) {
         this.deliver({
           ...msg,
           to: godId,
           subject: `[bounced — "${t}" is the send-only prep assistant; route work to a real agent] ${msg.subject}`
+        }, godId);
+        continue;
+      }
+      if (target && !isClaudeProvider(target.provider ?? 'claude')) {
+        this.deliver({
+          ...msg,
+          to: godId,
+          subject: `[bounced — "${t}" uses ${target.provider ?? 'custom'}; route via its terminal, not hive inbox] ${msg.subject}`
         }, godId);
         continue;
       }
