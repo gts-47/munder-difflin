@@ -130,7 +130,18 @@ export class PtyManager {
         }
       })();
 
-      const proc = pty.spawn(resolved, opts.args ?? [], {
+      // Windows: node-pty's CreateProcess can't run the npm `.cmd`/extensionless
+      // `claude` shim directly (ERROR_BAD_EXE_FORMAT, error 193). Route non-.exe
+      // targets through cmd.exe so PATHEXT resolves the shim. This also covers the
+      // auto-spawned GOD agent's hardcoded command. A real claude.exe (WinGet)
+      // matches the .exe guard and still launches directly.
+      let file = resolved;
+      let spawnArgs = opts.args ?? [];
+      if (process.platform === 'win32' && !/\.(exe|com)$/i.test(resolved)) {
+        file = process.env.ComSpec || 'cmd.exe';
+        spawnArgs = ['/c', opts.command, ...(opts.args ?? [])];
+      }
+      const proc = pty.spawn(file, spawnArgs, {
         name: 'xterm-256color',
         cols: opts.cols ?? 100,
         rows: opts.rows ?? 30,

@@ -291,7 +291,17 @@ export class MemoryReflector {
 
       let child;
       try {
-        child = spawn(exe, args, {
+        // Windows: route the npm `.cmd`/extensionless `claude` shim through cmd.exe;
+        // CreateProcess can't exec it directly (EINVAL on modern Node / error 193).
+        // The prompt rides in `args`; cmd leaves quoted args intact aside from %VAR%
+        // expansion (a follow-up could pass the prompt via stdin to avoid even that).
+        let spawnFile = exe;
+        let spawnArgs = args;
+        if (process.platform === 'win32' && !/\.(exe|com)$/i.test(exe)) {
+          spawnFile = process.env.ComSpec || 'cmd.exe';
+          spawnArgs = ['/c', exe, ...args];
+        }
+        child = spawn(spawnFile, spawnArgs, {
           cwd: home,
           env: { ...process.env, PATH: userShellPath(), ...this.getMemoryEnv() } as Record<string, string>,
           stdio: ['ignore', 'pipe', 'pipe']
