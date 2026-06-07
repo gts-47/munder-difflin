@@ -10,7 +10,7 @@ import { AgentStrip } from '@/components/AgentStrip';
 import { AddAgentModal } from '@/components/AddAgentModal';
 import { MichaelBooting } from '@/components/MichaelBooting';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
-import { QuitWarningModal } from '@/components/QuitWarningModal';
+import { QuitWarningModal, type ClosingTimeState } from '@/components/QuitWarningModal';
 import { SettingsModal } from '@/components/SettingsModal';
 import { PixelPanel } from '@/components/PixelPanel';
 import { PixelButton } from '@/components/PixelButton';
@@ -36,6 +36,7 @@ export function App() {
   const [config, setConfig] = useState<HarnessConfig | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [quitWarn, setQuitWarn] = useState<{ ptyCount: number } | null>(null);
+  const [closing, setClosing] = useState<ClosingTimeState | null>(null);
   const [vpWidth, setVpWidth] = useState<number>(window.innerWidth);
 
   // Initial config load
@@ -47,6 +48,24 @@ export function App() {
 
   // Quit warning subscription
   useEffect(() => window.cth.onCloseRequested((info) => setQuitWarn(info)), []);
+
+  // Closing-time progress: drives the quit dialog's "wrapping up" view. The
+  // dialog stays up through the whole protocol; on 'complete' the main process
+  // tears down and quits by itself moments later.
+  useEffect(() => window.cth.onClosingTime?.((ev) => {
+    if (ev.phase === 'cancelled') { setClosing(null); return; }
+    setClosing({ phase: ev.phase, acked: ev.acked, total: ev.total });
+    if (ev.phase === 'started' || ev.phase === 'progress') setQuitWarn((w) => w ?? { ptyCount: 0 });
+  }), []);
+
+  const startClosingTime = async () => {
+    const res = await window.cth.startClosingTime();
+    if (!res.ok) setClosing({ phase: 'error', acked: 0, total: 0, error: res.error });
+  };
+  const cancelClosingTime = () => {
+    void window.cth.cancelClosingTime();
+    setClosing(null);
+  };
 
   // The hive: god-agent bootstrap, hook-driven avatars, idle-agent waking.
   useHive(config);
@@ -254,8 +273,14 @@ export function App() {
       {quitWarn && (
         <QuitWarningModal
           ptyCount={quitWarn.ptyCount}
-          onCancel={() => { window.cth.cancelClose(); setQuitWarn(null); }}
+          closing={closing}
+          onCancel={() => {
+            if (closing) cancelClosingTime();
+            window.cth.cancelClose();
+            setQuitWarn(null);
+          }}
           onConfirm={async () => { await window.cth.confirmClose(); }}
+          onClosingTime={startClosingTime}
         />
       )}
 
