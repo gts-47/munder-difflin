@@ -6,7 +6,16 @@ import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
 import { OFFICE_CAST, DEFAULT_CHARACTER, type OfficeCharacterName } from '@/scene/office/cast';
 import { type AccentColorName } from '@/design/tokens';
-import { type HarnessConfig, buildSpawnCommand, AGENT_MODELS } from '@/store/config';
+import {
+  type HarnessConfig,
+  type AgentProvider,
+  buildSpawnCommand,
+  modelsForProvider,
+  inferAgentProvider,
+  providerPreset,
+  isClaudeProvider
+} from '@/store/config';
+import { AGENT_PROVIDER_PRESETS } from '@shared/agentProvider';
 
 const ACCENTS: AccentColorName[] = ['coral', 'mint', 'sky', 'lemon', 'lilac', 'peach'];
 
@@ -26,20 +35,36 @@ export interface AddAgentModalProps {
 export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
   const addAgent = useStore(s => s.addAgent);
 
+  // Default provider follows whatever the global default command is (claude
+  // unless the user reconfigured it); the model only carries over for Claude.
+  const initialProvider = inferAgentProvider(config.defaultCommand);
+  const initialModel = isClaudeProvider(initialProvider) ? config.defaultModel : undefined;
+
   const [name, setName] = useState('Jim');
   const [character, setCharacter] = useState<OfficeCharacterName>(DEFAULT_CHARACTER);
   const [accent, setAccent] = useState<AccentColorName>('sky');
   const [cwd, setCwd] = useState<string>(config.registeredRepos[0] ?? '');
-  const [model, setModel] = useState<string | undefined>(config.defaultModel);
-  const [command, setCommand] = useState(buildSpawnCommand(config, config.defaultModel));
+  const [provider, setProvider] = useState<AgentProvider>(initialProvider);
+  const [model, setModel] = useState<string | undefined>(initialModel);
+  const [command, setCommand] = useState(buildSpawnCommand(config, initialModel, initialProvider));
   const [description, setDescription] = useState('a fresh harness');
 
   // Picking a model rebuilds the command; the command field stays editable for
   // power users (it's the source of truth for the actual spawn).
   const pickModel = (id?: string) => {
     setModel(id);
-    setCommand(buildSpawnCommand(config, id));
+    setCommand(buildSpawnCommand(config, id, provider));
   };
+  // Switching provider resets the model to that CLI's default and rebuilds the
+  // command from the provider's preset binary (so Antigravity spawns `agy`, not
+  // the configured `claude`).
+  const pickProvider = (id: AgentProvider) => {
+    setProvider(id);
+    const nextModel = isClaudeProvider(id) ? config.defaultModel : undefined;
+    setModel(nextModel);
+    setCommand(buildSpawnCommand(config, nextModel, id));
+  };
+  const preset = providerPreset(provider);
   const [goal, setGoal] = useState('');
   const [isolate, setIsolate] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -69,6 +94,7 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
       cwd,
       command: exe,
       args,
+      provider,
       cols: 100,
       rows: 30,
       // When set, the main process spawns this agent in its own git worktree.
@@ -78,6 +104,7 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
         id,
         name: name.trim(),
         cwd,
+        provider,
         role: description.trim() || undefined
       }
     });
@@ -103,6 +130,7 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
       currentStation: 'desk',
       ptyId,
       command: command.trim(),
+      provider,
       model,
       recentTextTs: Date.now()
     };
@@ -178,9 +206,41 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
               </div>
             </Row>
 
-            <Row label="Model">
+            <Row label="Provider">
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {AGENT_MODELS.map((m) => {
+                {AGENT_PROVIDER_PRESETS.map((p) => {
+                  const active = provider === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => pickProvider(p.id)}
+                      title={
+                        p.id === 'antigravity'
+                          ? 'Spawn the Antigravity CLI (agy) with a Gemini model'
+                          : p.id === 'custom'
+                            ? 'Run any command — no Claude-only flags'
+                            : p.label
+                      }
+                      style={{
+                        padding: '3px 8px 1px',
+                        background: active ? `var(--cth-${accent}-light)` : 'var(--cth-cream-100)',
+                        boxShadow: active
+                          ? 'inset 0 0 0 2px var(--cth-ink-900)'
+                          : 'inset 0 0 0 1px var(--cth-ink-700)',
+                        fontFamily: 'var(--cth-font-ui)', fontSize: 13,
+                        color: 'var(--cth-ink-900)', cursor: 'pointer', border: 'none'
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Row>
+
+            {preset.supportsModel && <Row label="Model">
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {modelsForProvider(provider).map((m) => {
                   const active = (model ?? '') === (m.id ?? '');
                   return (
                     <button
@@ -202,13 +262,13 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
                   );
                 })}
               </div>
-            </Row>
+            </Row>}
 
-            <Row label={config.autoMode ? 'Command (auto mode on)' : 'Command'}>
+            <Row label={config.autoMode && preset.autoFlag ? 'Command (auto mode on)' : 'Command'}>
               <input
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                placeholder="claude"
+                placeholder={provider === 'antigravity' ? 'agy' : provider === 'custom' ? 'your-agent-cli' : 'claude'}
                 style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)' }}
               />
             </Row>

@@ -26,6 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AgentUsageSample } from './usage';
 import { COMMAND_GROUPS } from '../shared/claudeCommands';
+import { isHiveAwareProvider, type AgentProvider } from '../shared/agentProvider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -60,6 +61,8 @@ export interface HiveTask {
 export interface AgentMeta {
   id: string;
   name: string;
+  /** Which CLI this agent runs on. Defaults to 'claude' when unset (legacy). */
+  provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
   cwd: string;
@@ -283,6 +286,15 @@ export class HiveManager {
       HIVE_ROOT: root,
       AGENT_DIR: dir
     };
+
+    // Non-Claude providers (e.g. Antigravity's `agy`) don't understand Claude
+    // Code's flags or hook protocol. They still get a hive workspace + the
+    // shared AGENT_* env above, but no telemetry/prompt/settings injection —
+    // and direct hive mail to them bounces to the god (router). This is what
+    // makes the floor runnable without Claude installed at all.
+    if (!isHiveAwareProvider(meta.provider)) {
+      return { args: [], env };
+    }
 
     // Stage 7A — first-party Claude Code telemetry → the embedded loopback OTLP
     // collector (telemetry.ts). Pure env, no --settings change. Only injected
@@ -550,6 +562,19 @@ export class HiveManager {
           ...msg,
           to: godId,
           subject: `[bounced — "${t}" is the send-only prep assistant; route work to a real agent] ${msg.subject}`
+        }, godId);
+        continue;
+      }
+      // Non-Claude workers (e.g. Antigravity's `agy`) don't run the hive's Stop
+      // hook, so they never drain their inbox — direct mail would rot unread.
+      // Bounce it to the god (the same way assistant mail bounces) so the
+      // orchestrator relays it as a live prompt instead. God himself is exempt
+      // (he may legitimately run on any provider and is the bounce target).
+      if (t !== godId && !isHiveAwareProvider(reg.agents[t]?.provider)) {
+        this.deliver({
+          ...msg,
+          to: godId,
+          subject: `[bounced — "${t}" runs ${reg.agents[t]?.provider ?? 'a non-Claude CLI'} and can't read its hive inbox; relay this to it] ${msg.subject}`
         }, godId);
         continue;
       }

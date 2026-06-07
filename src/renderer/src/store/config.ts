@@ -1,6 +1,22 @@
 // Mirrors src/main/config.ts. Kept as a renderer-side type-only module
 // so we don't have to reach into the preload package to type-check.
 
+import {
+  AGENT_PROVIDER_PRESETS,
+  providerPreset,
+  inferAgentProvider,
+  isClaudeProvider,
+  type AgentProvider
+} from '@shared/agentProvider';
+
+export {
+  AGENT_PROVIDER_PRESETS,
+  providerPreset,
+  inferAgentProvider,
+  isClaudeProvider,
+  type AgentProvider
+};
+
 /** A recurring auto-dispatched mission (mirrors src/main/config.ts). */
 export interface ScheduledMission {
   id: string;
@@ -75,13 +91,40 @@ export const AGENT_MODELS: ModelOption[] = [
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' }
 ];
 
-/** Build the command line to feed into spawnPty, honoring autoMode and an
- *  optional per-agent model override (injected as `--model <model>`). */
+/** Gemini models offered when an agent runs on the Antigravity CLI (`agy`).
+ *  `--model` is free-form, so these are presets — the command field stays
+ *  editable. Run `agy models` (once logged in) for the live list. */
+export const ANTIGRAVITY_MODELS: ModelOption[] = [
+  { id: undefined, label: 'default' },
+  { id: 'gemini-3-pro', label: 'Gemini 3 Pro' },
+  { id: 'gemini-3-flash', label: 'Gemini 3 Flash' },
+  { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }
+];
+
+/** The model preset list for a given provider's picker. */
+export function modelsForProvider(provider: AgentProvider): ModelOption[] {
+  return provider === 'antigravity' ? ANTIGRAVITY_MODELS : AGENT_MODELS;
+}
+
+/** Build the command line to feed into spawnPty, honoring the provider's flags,
+ *  autoMode, and an optional per-agent model override. Claude keeps the user's
+ *  configured `defaultCommand`; other providers use their preset binary so the
+ *  app works without Claude installed. */
 export function buildSpawnCommand(
   config: Pick<HarnessConfig, 'defaultCommand' | 'autoMode'>,
-  model?: string
+  model?: string,
+  provider: AgentProvider = inferAgentProvider(config.defaultCommand)
 ): string {
-  const base = config.defaultCommand || 'claude';
-  const withModel = model ? `${base} --model ${model}` : base;
-  return config.autoMode ? `${withModel} --permission-mode bypassPermissions` : withModel;
+  const preset = providerPreset(provider);
+  const base =
+    provider === 'claude'
+      ? config.defaultCommand || preset.defaultCommand
+      : provider === 'custom'
+        ? config.defaultCommand || ''
+        : preset.defaultCommand;
+  let cmd = base;
+  if (preset.supportsModel && model && preset.modelFlag) cmd = `${cmd} ${preset.modelFlag} ${model}`;
+  if (config.autoMode && preset.autoFlag) cmd = `${cmd} ${preset.autoFlag}`;
+  return cmd;
 }

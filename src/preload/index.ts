@@ -1,8 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import type { AgentProvider } from '../shared/agentProvider';
 
 export interface HiveAgentMeta {
   id: string;
   name: string;
+  /** Which CLI this agent runs on (claude/antigravity/custom); defaults claude. */
+  provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
   cwd: string;
@@ -62,6 +65,8 @@ export interface SpawnPtyOptions {
   id: string;
   cwd: string;
   command: string;
+  /** Which CLI to spawn; usually inferred from `command` in the main process. */
+  provider?: AgentProvider;
   args?: string[];
   cols?: number;
   rows?: number;
