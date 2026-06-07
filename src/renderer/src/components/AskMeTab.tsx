@@ -43,7 +43,11 @@ export function AskMeTab() {
   const agents = useStore((s) => s.agents);
   const restorable = useStore((s) => s.restorableAgents);
   const [tasks, setTasks] = useState<HiveTask[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Drafts live in the STORE (keyed by task id) — switching tabs unmounts this
+  // view, and a half-typed answer must survive the round trip.
+  const drafts = useStore((s) => s.answerDrafts);
+  const setAnswerDraft = useStore((s) => s.setAnswerDraft);
+  const openTaskDetail = useStore((s) => s.openTaskDetail);
   const [sending, setSending] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -92,7 +96,7 @@ export function AskMeTab() {
           'The answer is also recorded in the card\'s humanQA. Act on it, unblock the card, and continue the work.'
         ].join('\n')
       }, 'human');
-      setDrafts((d) => ({ ...d, [task.id]: '' }));
+      setAnswerDraft(task.id, '');
     } catch { /* leave the draft so the user can retry */ }
     setSending(null);
   };
@@ -121,9 +125,17 @@ export function AskMeTab() {
               display: 'flex', alignItems: 'center', gap: 8, padding: '6px 9px',
               background: 'var(--cth-lilac-light, #ece2f5)', boxShadow: 'inset 0 -1px 0 var(--cth-ink-700)'
             }}>
-              <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <button
+                onClick={() => openTaskDetail(t.id)}
+                title="open the full task detail"
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, textAlign: 'left',
+                  fontFamily: 'var(--cth-font-ui)', fontSize: 13, color: 'var(--cth-ink-900)',
+                  flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+                }}
+              >
                 {t.title}
-              </span>
+              </button>
               {nameFor(t.assignee) && <PixelBadge status="blocked" label={nameFor(t.assignee)!} />}
             </div>
 
@@ -136,7 +148,7 @@ export function AskMeTab() {
               {/* answer box */}
               <textarea
                 value={drafts[t.id] ?? ''}
-                onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
+                onChange={(e) => setAnswerDraft(t.id, e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void sendAnswer(t); }}
                 rows={3}
                 placeholder="Your answer — or 'done', with the result… (Ctrl+Enter to send)"
@@ -157,9 +169,17 @@ export function AskMeTab() {
                   {sending === t.id ? 'sending…' : 'respond & unblock'}
                 </PixelButton>
                 {(t.humanQA?.filter((e) => e.a).length ?? 0) > 0 && (
-                  <span style={{ fontSize: 10, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-display)' }}>
-                    {t.humanQA!.filter((e) => e.a).length} EARLIER ANSWER{t.humanQA!.filter((e) => e.a).length === 1 ? '' : 'S'} ON THIS CARD
-                  </span>
+                  <button
+                    onClick={() => openTaskDetail(t.id)}
+                    title="open the task detail with the full Q&A history"
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer', padding: 0,
+                      fontSize: 10, color: 'var(--cth-ink-700)', fontFamily: 'var(--cth-font-display)',
+                      textDecoration: 'underline'
+                    }}
+                  >
+                    VIEW {t.humanQA!.filter((e) => e.a).length} EARLIER ANSWER{t.humanQA!.filter((e) => e.a).length === 1 ? '' : 'S'}
+                  </button>
                 )}
               </div>
 

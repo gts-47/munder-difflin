@@ -160,6 +160,10 @@ interface State {
    *  "assign" from anywhere in the app). seq-keyed like ccTabRequest. */
   dispatchSeedRequest: { text: string; seq: number } | null;
   requestDispatchSeed: (text: string) => void;
+  /** Unsent ASK ME answer drafts, keyed by task id — so switching tabs (which
+   *  unmounts the ask-me view) doesn't eat a half-typed answer. */
+  answerDrafts: Record<string, string>;
+  setAnswerDraft: (taskId: string, text: string) => void;
   /** Unsent composer drafts, per agent — so switching agents (which remounts the
    *  composer) doesn't eat what the user was typing. */
   drafts: Record<string, string>;
@@ -456,6 +460,9 @@ export const useStore = create<State>((set) => ({
   dispatchSeedRequest: null,
   requestDispatchSeed: (text) =>
     set((s) => ({ dispatchSeedRequest: { text, seq: (s.dispatchSeedRequest?.seq ?? 0) + 1 } })),
+  answerDrafts: {},
+  setAnswerDraft: (taskId, text) =>
+    set((s) => ({ answerDrafts: { ...s.answerDrafts, [taskId]: text } })),
   drafts: {},
   setDraft: (agentId, text) =>
     set((s) => ({ drafts: { ...s.drafts, [agentId]: text } })),
