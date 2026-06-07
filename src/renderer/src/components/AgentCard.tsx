@@ -93,6 +93,9 @@ export function AgentCard({
             <div style={{
               fontSize: 'var(--cth-text-body-sm)',
               lineHeight: '16px',
+              // Reserve the line even when empty (idle has no action text) —
+              // otherwise it collapses and the context gauge below jumps up.
+              minHeight: 16,
               color: 'var(--cth-ink-900)',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -102,9 +105,10 @@ export function AgentCard({
 
             {/* Context gauge: how full the session's context window is. Accent
                 while comfortable, lemon from 6/8 (~75%), coral from 7/8 —
-                "compaction imminent". */}
+                "compaction imminent". Pinned to the card's bottom line so it
+                never moves, whatever the lines above do. */}
             <div
-              style={{ display: 'flex', gap: 2, marginTop: 2 }}
+              style={{ display: 'flex', gap: 2, marginTop: 'auto' }}
               title={contextTokens !== undefined && contextLimit
                 ? `Context: ${fmtK(contextTokens)} / ${fmtK(contextLimit)} tokens (${Math.round((contextTokens / contextLimit) * 100)}%)`
                 : 'Context gauge — fills once the agent reports activity'}
