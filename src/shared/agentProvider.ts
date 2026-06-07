@@ -27,6 +27,11 @@ export interface AgentProviderPreset {
    *  + hook `--settings`). Other CLIs don't — they spawn with the shared AGENT_*
    *  env only, and direct hive mail to them bounces to the god. */
   hiveAware: boolean;
+  /** For non-hive-aware CLIs that still take an INITIAL prompt to orient the
+   *  session (Antigravity's `agy -i "<prompt>"`), the flag to pass it under. The
+   *  hive identity+protocol rides in as the first turn — the closest thing to
+   *  Claude's `--append-system-prompt` these CLIs offer. undefined = no way in. */
+  initialPromptFlag?: string;
 }
 
 export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
@@ -46,7 +51,8 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     supportsModel: true,
     modelFlag: '--model',
     autoFlag: '--dangerously-skip-permissions',
-    hiveAware: false
+    hiveAware: false,
+    initialPromptFlag: '-i' // agy --prompt-interactive: orient the session, then continue
   },
   {
     id: 'custom',

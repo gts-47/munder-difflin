@@ -26,7 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AgentUsageSample } from './usage';
 import { COMMAND_GROUPS } from '../shared/claudeCommands';
-import { isHiveAwareProvider, type AgentProvider } from '../shared/agentProvider';
+import { isHiveAwareProvider, providerPreset, type AgentProvider } from '../shared/agentProvider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -288,11 +288,17 @@ export class HiveManager {
     };
 
     // Non-Claude providers (e.g. Antigravity's `agy`) don't understand Claude
-    // Code's flags or hook protocol. They still get a hive workspace + the
-    // shared AGENT_* env above, but no telemetry/prompt/settings injection —
-    // and direct hive mail to them bounces to the god (router). This is what
-    // makes the floor runnable without Claude installed at all.
+    // Code's flags or hook protocol — no telemetry, no `--settings` hooks, and
+    // direct hive mail to them bounces to the god (router). But where the CLI
+    // takes an INITIAL prompt (agy's `-i`), we still orient the session with the
+    // same hive identity+protocol — the closest thing to `--append-system-prompt`
+    // these CLIs offer (it's the first turn, then the session continues). This is
+    // what makes a Gemini worker hive-aware without Claude installed at all.
     if (!isHiveAwareProvider(meta.provider)) {
+      const flag = providerPreset(meta.provider ?? 'claude').initialPromptFlag;
+      if (flag) {
+        return { args: [flag, this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false)], env };
+      }
       return { args: [], env };
     }
 
