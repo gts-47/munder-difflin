@@ -193,6 +193,14 @@ export interface ToolSpan {
   error?: string;
 }
 
+/** Closing-time progress event (mirrors src/main/closingTime.ts). */
+export interface ClosingTimeEvent {
+  phase: 'started' | 'progress' | 'complete' | 'timeout' | 'cancelled';
+  /** Workers that have ACKed so far / total workers being waited on. */
+  acked: number;
+  total: number;
+}
+
 /** Per-agent operator-control state (#7C.1–7C.3). */
 export interface AgentControlSnapshot {
   paused: boolean;
@@ -398,6 +406,22 @@ const api = {
   },
   confirmClose: (): Promise<void> => ipcRenderer.invoke('app:confirmClose'),
   cancelClose: (): Promise<void> => ipcRenderer.invoke('app:cancelClose'),
+
+  // ─── Closing time (graceful shutdown via the hive) ─────────────────────────
+  /** Start the closing-time protocol: the god broadcasts shutdown, every worker
+   *  saves its memory and ACKs, the god concludes — then the app quits itself.
+   *  Resolves with ok:false (+ error) when no god agent is running. */
+  startClosingTime: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('app:startClosingTime'),
+  /** Abort an in-progress closing time and tell the floor to resume work. */
+  cancelClosingTime: (): Promise<void> => ipcRenderer.invoke('app:cancelClosingTime'),
+  /** Progress events for the quit dialog: started → progress (ACK counts) →
+   *  complete (the app tears down moments later) | timeout | cancelled. */
+  onClosingTime: (cb: (ev: ClosingTimeEvent) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, ev: ClosingTimeEvent) => cb(ev);
+    ipcRenderer.on('app:closingTime', listener);
+    return () => ipcRenderer.removeListener('app:closingTime', listener);
+  },
 
   // ─── Reset ─────────────────────────────────────────────────────────────────
   /** Wipe all hive data + the memory palace, reset config, and relaunch the app

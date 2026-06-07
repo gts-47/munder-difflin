@@ -557,6 +557,16 @@ export class HiveManager {
     }
     this.appendLog({ kind: 'message', from: msg.from, to: msg.to, act: msg.act, subject: msg.subject, id: msg.id });
     this.emitMessage(msg, targets);
+    // Main-process observer (e.g. the closing-time controller watching for the
+    // team's ACKs and the god's COMPLETE). Best-effort, never breaks routing.
+    try { this.routedObserver?.(msg, targets); } catch { /* observer error */ }
+  }
+
+  /** Observer invoked for EVERY routed message with its resolved targets.
+   *  Used by main-process features that react to hive traffic (closing time). */
+  private routedObserver: ((msg: HiveMessage, targets: string[]) => void) | null = null;
+  setRoutedObserver(cb: ((msg: HiveMessage, targets: string[]) => void) | null): void {
+    this.routedObserver = cb;
   }
 
   /** Tell the renderer a message was routed, with its resolved recipients, so

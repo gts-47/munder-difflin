@@ -25,6 +25,7 @@ import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer } from './slack';
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
+import { ClosingTimeController } from './closingTime';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const ptyManager = new PtyManager();
@@ -978,7 +979,9 @@ ipcMain.handle('history:search', (_evt, query: unknown, limit: unknown) =>
   persist.searchHistory(typeof query === 'string' ? query : '', typeof limit === 'number' ? limit : undefined));
 
 // ─── IPC: quit confirmation ─────────────────────────────────────────────────
-ipcMain.handle('app:confirmClose', () => {
+/** Tear the harness down and quit. Shared by the hard "kill all & quit" path
+ *  and the closing-time conclusion (after the god confirmed the floor saved). */
+function teardownAndQuit(): void {
   allowQuit = true;
   // Each teardown step is best-effort: a throw here (e.g. a dying child or a
   // half-torn-down socket) must never abort the quit or pop a crash dialog.
@@ -992,10 +995,34 @@ ipcMain.handle('app:confirmClose', () => {
   try { persist.close(); } catch (e) { console.error('[quit] persist.close:', e); }
   try { ptyManager.killAll(); } catch (e) { console.error('[quit] killAll:', e); }
   app.quit();
+}
+ipcMain.handle('app:confirmClose', () => {
+  closingTime.cancel(); // a hard quit overrides a closing time in progress
+  teardownAndQuit();
 });
 ipcMain.handle('app:cancelClose', () => {
   // no-op — modal will close on the renderer side
 });
+
+// ─── IPC: closing time (graceful, data-loss-free shutdown) ──────────────────
+// The third quit-dialog button. The god broadcasts closing time, every worker
+// saves its memory and ACKs, the god concludes with CLOSING-TIME-COMPLETE —
+// only then does the harness tear down. See closingTime.ts for the protocol.
+const closingTime = new ClosingTimeController(
+  hive,
+  // Roster source: agents with a live PTY right now (ptyToAgent is pruned on
+  // every teardown). The registry alone would include ghost workers from
+  // sessions that ended with a hard quit — never archived, never able to ACK.
+  () => [...new Set(ptyToAgent.values())],
+  () => liveWebContents(),
+  () => teardownAndQuit(),
+  // #7C.2 steering — the graceful interrupt that reaches deeply busy agents
+  // at their next hook boundary instead of waiting for a Stop.
+  control
+);
+hive.setRoutedObserver((msg, targets) => closingTime.onRouted(msg, targets));
+ipcMain.handle('app:startClosingTime', () => closingTime.start());
+ipcMain.handle('app:cancelClosingTime', () => closingTime.cancel());
 
 // ─── IPC: full reset (wipe data + config, relaunch into onboarding) ──────────
 ipcMain.handle('app:resetAll', () => {

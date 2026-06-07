@@ -426,6 +426,22 @@ export function useHive(config: HarnessConfig | null): void {
     return () => clearInterval(iv);
   }, [config?.onboardingComplete]);
 
+  // 3b) Closing time: the hive mail rails cover god + workers, but the prep
+  //     assistant is send-only (no inbox) — the god is even told NOT to wait
+  //     for it. So when the protocol starts, the harness itself asks the
+  //     assistant to save its memory, best-effort, directly via its terminal.
+  useEffect(() => {
+    return window.cth.onClosingTime?.((ev) => {
+      if (ev.phase !== 'started') return;
+      const asst = useStore.getState().agents.find((a) => a.isAssistant && a.ptyId);
+      if (!asst?.ptyId) return;
+      void submitToPty(
+        asst.ptyId,
+        'CLOSING TIME — the harness is shutting down. Append your durable learnings and any in-progress context to your memory.md NOW, then stop. Do not start new work.'
+      );
+    });
+  }, []);
+
   // 4) Drain each agent's queued messages to its terminal, one at a time, the
   //    moment the agent goes idle. This is what lets the user keep sending
   //    messages while the agent's "cloud terminal" is mid-run: the messages
