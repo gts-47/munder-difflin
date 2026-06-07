@@ -64,11 +64,11 @@ export class PtyManager {
     if (command.includes('/') || command.includes('\\')) return command;
     if (process.platform === 'win32') {
       // `where` is the Windows equivalent of `which`; runs via cmd.exe (shell:true).
-      // It can return MULTIPLE matches in PATH order, and the first is often an
-      // EXTENSIONLESS shim (e.g. a bare `claude`). node-pty's CreateProcess can
-      // only launch a real executable/script — one whose extension is in PATHEXT
-      // (.EXE/.CMD/.BAT/…); an extensionless file fails with error 193 (issue
-      // #22). So skip extensionless hits and take the first PATHEXT-eligible one.
+      // It can return MULTIPLE matches in PATH order; the first is often an
+      // EXTENSIONLESS shim (bare `claude`). Skip extensionless hits and take
+      // the first PATHEXT-eligible one (.CMD/.BAT/.EXE/…). NOTE: even .CMD/.BAT
+      // files are not directly spawnable by node-pty's CreateProcess (error 193);
+      // spawn() routes them through `cmd.exe /c` (see below).
       try {
         const res = spawnSync('where', [command], { encoding: 'utf8', timeout: 3000, shell: true });
         const lines = (res.stdout ?? '').trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -144,7 +144,15 @@ export class PtyManager {
         }
       })();
 
-      const proc = pty.spawn(resolved, opts.args ?? [], {
+      // On Windows, .cmd/.bat files (and extensionless shims) cannot be executed
+      // directly by CreateProcess — only .exe/.com can. Route them through cmd.exe /c.
+      const isWin = process.platform === 'win32';
+      const lower = resolved.toLowerCase();
+      const directExe = lower.endsWith('.exe') || lower.endsWith('.com');
+      const needsCmd = isWin && !directExe;
+      const file = needsCmd ? (process.env.ComSpec || 'cmd.exe') : resolved;
+      const spawnArgs = needsCmd ? ['/c', resolved, ...(opts.args ?? [])] : (opts.args ?? []);
+      const proc = pty.spawn(file, spawnArgs, {
         name: 'xterm-256color',
         cols: opts.cols ?? 100,
         rows: opts.rows ?? 30,
