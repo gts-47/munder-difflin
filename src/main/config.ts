@@ -2,6 +2,7 @@ import { app } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
+import { autoModeFlagForProvider, inferAgentProvider, type AgentProvider } from '../shared/agentProvider';
 
 /** A recurring auto-dispatched mission fired on an interval by the scheduler. */
 export interface ScheduledMission {
@@ -258,12 +259,17 @@ export function modelForRole(meta: RoleHint): string | undefined {
   return MODEL_WORKER;
 }
 
-/** Auto-suggested command string given current autoMode preference. */
-export function commandForAutoMode(config: HarnessConfig): string {
-  if (config.autoMode) {
-    return `${config.defaultCommand} --permission-mode bypassPermissions`;
-  }
-  return config.defaultCommand;
+/** Auto-suggested command string given current autoMode preference.
+ *  Provider-aware: Claude gets --permission-mode bypassPermissions; Codex gets
+ *  --full-auto; custom providers receive no extra flags. */
+export function commandForAutoMode(
+  config: HarnessConfig,
+  provider?: AgentProvider
+): string {
+  if (!config.autoMode) return config.defaultCommand;
+  const p = provider ?? inferAgentProvider(config.defaultCommand);
+  const flag = autoModeFlagForProvider(p);
+  return flag ? `${config.defaultCommand} ${flag}` : config.defaultCommand;
 }
 
 /** Ensure harnessHome exists on disk. */

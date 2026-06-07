@@ -2,6 +2,7 @@
 // so we don't have to reach into the preload package to type-check.
 import {
   AGENT_PROVIDER_PRESETS,
+  autoModeFlagForProvider,
   defaultCommandForProvider,
   inferAgentProvider,
   isClaudeProvider,
@@ -100,5 +101,7 @@ export function buildSpawnCommand(
     ? config.defaultCommand || defaultCommandForProvider(provider)
     : defaultCommandForProvider(provider, config.defaultCommand || '') || config.defaultCommand || '';
   const withModel = isClaudeProvider(provider) && model ? `${base} --model ${model}` : base;
-  return isClaudeProvider(provider) && config.autoMode ? `${withModel} --permission-mode bypassPermissions` : withModel;
+  if (!config.autoMode) return withModel;
+  const flag = autoModeFlagForProvider(provider);
+  return flag ? `${withModel} ${flag}` : withModel;
 }

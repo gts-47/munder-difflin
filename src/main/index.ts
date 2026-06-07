@@ -26,7 +26,7 @@ import { SlackWebhookServer } from './slack';
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
 import { ClosingTimeController } from './closingTime';
-import { inferAgentProvider, isClaudeProvider, type AgentProvider } from '../shared/agentProvider';
+import { inferAgentProvider, isClaudeProvider, nonInteractiveEnvForProvider, type AgentProvider } from '../shared/agentProvider';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const ptyManager = new PtyManager();
@@ -726,6 +726,12 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   // interactive prompt it can't answer and exit code 1. Best-effort, never blocks.
   if (isClaudeProvider(provider)) {
     try { ensureClaudePermissionsAccepted(opts.cwd); } catch { /* never block spawn */ }
+  }
+  // Suppress first-run interactive prompts for providers that need it (e.g. Codex
+  // directory-trust gate). Merges into any env already set on opts.
+  const nonInteractiveEnv = nonInteractiveEnvForProvider(provider);
+  if (Object.keys(nonInteractiveEnv).length > 0) {
+    opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };
   }
   const res = ptyManager.spawn(opts);
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
