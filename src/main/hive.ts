@@ -21,7 +21,8 @@ import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
   readdirSync, statSync, rmSync, appendFileSync
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AgentUsageSample } from './usage';
@@ -297,6 +298,15 @@ export class HiveManager {
     if (!isHiveAwareProvider(meta.provider)) {
       const flag = providerPreset(meta.provider ?? 'claude').initialPromptFlag;
       if (flag) {
+        // agy DOES expose lifecycle hooks (PreToolUse/PostToolUse/Stop/…), just
+        // with its own payload shape and config file. Install the bridge so a
+        // Gemini worker gets the SAME live status + inbox-drain Claude does — on
+        // the subscription, no SDK/API-key. The shim reads HIVE_SOCK + AGENT_ID.
+        const sock = this.sockPath();
+        if (sock) {
+          env.HIVE_SOCK = sock;
+          try { this.installAgyHooks(); } catch (e) { console.error('[hive] installAgyHooks failed:', e); }
+        }
         return { args: [flag, this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false)], env };
       }
       return { args: [], env };
@@ -693,6 +703,52 @@ export class HiveManager {
     if (!existsSync(dir)) return 0;
     try { return readdirSync(dir).filter((f) => f.endsWith('.json')).length; } catch { return 0; }
   }
+  /** Install the Antigravity (`agy`) lifecycle-hook bridge: write the normalizer
+   *  shim and merge a `munder-hive` hook group into agy's global hooks.json so a
+   *  Gemini worker reports PreToolUse/PostToolUse/Stop/PreInvocation/PostInvocation
+   *  to this HookServer (live status + inbox-drain), reusing the Claude pipeline.
+   *
+   *  Two agy-isms handled: (1) antigravity-cli#49 — agy LOADS hooks from
+   *  `~/.gemini/antigravity-cli/hooks.json` but TRIGGERS from `~/.gemini/config/
+   *  hooks.json`, so we write BOTH; (2) commands go to cmd.exe and agy mangles
+   *  embedded quotes, so the shim path must be space-free (hive roots are).
+   *  Runtime-scoped by AGENT_ID (the shim no-ops for non-hive agy sessions), so
+   *  this global config never disturbs the user's own `agy` usage. Best-effort,
+   *  idempotent (only our own group is overwritten). */
+  private installAgyHooks(): void {
+    const root = this.root();
+    if (!root) return;
+    const shim = join(root, 'bin', 'agy-hook.cjs');
+    mkdirSync(join(root, 'bin'), { recursive: true });
+    writeFileSync(shim, AGY_HOOK_SHIM, 'utf8');
+    const tool = (event: string) => ({
+      matcher: '*',
+      hooks: [{ type: 'command', command: `node ${shim} ${event}`, timeout: 0 }]
+    });
+    const plain = (event: string) => ({
+      hooks: [{ type: 'command', command: `node ${shim} ${event}`, timeout: 0 }]
+    });
+    const group = {
+      PreToolUse: [tool('PreToolUse')],
+      PostToolUse: [tool('PostToolUse')],
+      PreInvocation: [plain('PreInvocation')],
+      PostInvocation: [plain('PostInvocation')],
+      Stop: [plain('Stop')]
+    };
+    const gem = join(homedir(), '.gemini');
+    for (const p of [join(gem, 'config', 'hooks.json'), join(gem, 'antigravity-cli', 'hooks.json')]) {
+      try {
+        mkdirSync(dirname(p), { recursive: true });
+        let existing: Record<string, unknown> = {};
+        if (existsSync(p)) {
+          try { existing = JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>; } catch { existing = {}; }
+        }
+        existing['munder-hive'] = group;
+        writeFileSync(p, JSON.stringify(existing, null, 2), 'utf8');
+      } catch { /* best-effort per file */ }
+    }
+  }
+
   /** Write the live fleet snapshot Michael reads (`fleet.json`, gitignored).
    *  Best-effort — called from a timer, must never throw. */
   writeFleetSnapshot(snapshot: unknown): void {
@@ -965,5 +1021,66 @@ process.stdin.on('end', () => {
   c.on('end', () => done(0));
   c.on('error', () => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();
+});
+`;
+
+// ─── agy-hook shim (written to <hive>/bin/agy-hook.cjs) ──────────────────────
+// Antigravity's `agy` CLI fires lifecycle hooks (PreToolUse/PostToolUse/Stop/
+// PreInvocation/PostInvocation) but with a DIFFERENT stdin shape than Claude
+// (conversationId / toolCall{name,args} / workspacePaths, and no hook_event_name
+// — the event arrives as argv from the hooks.json command). This shim normalizes
+// that into the same HookPayload the HookServer already consumes, so status,
+// inbox-drain-on-Stop, and tool gating are reused UNCHANGED, then translates the
+// server's Claude-shaped response back into agy's stdout contract (decision:
+// allow|deny|block + a message). Scoped by AGENT_ID: a personal agy session
+// (no AGENT_ID in env) is a no-op, so the global hooks.json never disturbs the
+// user's own agy usage — only hive workers (spawned with AGENT_ID set) bridge.
+// NOTE (agy bug, antigravity-cli#49): the loader reads ~/.gemini/antigravity-cli/
+// hooks.json but the trigger reads ~/.gemini/config/hooks.json — we write BOTH.
+const AGY_HOOK_SHIM = `#!/usr/bin/env node
+'use strict';
+const net = require('net');
+const event = process.argv[2] || 'Unknown';
+const agentId = process.env.AGENT_ID || null;
+let data = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (d) => { data += d; });
+process.stdin.on('end', () => {
+  const sock = process.env.HIVE_SOCK;
+  if (!agentId || !sock) { process.exit(0); } // not a hive worker → ignore
+  let agy = {};
+  try { agy = JSON.parse(data || '{}'); } catch (_) {}
+  const tc = agy.toolCall || {};
+  const payload = {
+    hook_event_name: event,
+    agent_id: agentId,
+    session_id: agy.conversationId,
+    transcript_path: agy.transcriptPath,
+    cwd: Array.isArray(agy.workspacePaths) ? agy.workspacePaths[0] : undefined,
+    tool_name: tc.name,
+    tool_input: tc.args
+  };
+  let resp = '';
+  const done = () => {
+    // Translate the HookServer's Claude-shaped reply into agy's contract.
+    let out = {};
+    try {
+      const r = JSON.parse(resp || '{}');
+      if (r.decision === 'block') out = { decision: 'block', reason: r.reason, stopReason: r.reason, systemMessage: r.reason };
+      else if (r.hookSpecificOutput && r.hookSpecificOutput.permissionDecision === 'deny') out = { decision: 'deny', reason: r.hookSpecificOutput.permissionDecisionReason };
+      else if (r.continue === false) out = { decision: 'block', stopReason: r.stopReason };
+      else if (r.hookSpecificOutput && r.hookSpecificOutput.additionalContext) out = { systemMessage: r.hookSpecificOutput.additionalContext };
+    } catch (_) {}
+    try { process.stdout.write(JSON.stringify(out)); } catch (_) {}
+    process.exit(0);
+  };
+  try {
+    const c = net.createConnection(sock, () => c.write(JSON.stringify(payload) + '\\n'));
+    c.setEncoding('utf8');
+    c.on('data', (d) => { resp += d; });
+    c.on('end', done);
+    c.on('error', () => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  } catch (_) { process.exit(0); }
 });
 `;
