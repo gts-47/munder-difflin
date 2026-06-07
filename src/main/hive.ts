@@ -566,11 +566,7 @@ export class HiveManager {
         continue;
       }
       if (target && !isClaudeProvider(target.provider ?? 'claude')) {
-        this.deliver({
-          ...msg,
-          to: godId,
-          subject: `[bounced — "${t}" uses ${target.provider ?? 'custom'}; route via its terminal, not hive inbox] ${msg.subject}`
-        }, godId);
+        this.emitTerminalHandoff(msg, t);
         continue;
       }
       this.deliver(msg, t);
@@ -592,6 +588,20 @@ export class HiveManager {
       // Coral-tints the floor envelope for a message the agent flagged for the
       // human (now routed to the god proxy). Cosmetic only — no queue behind it.
       needsHuman: msg.to === 'human'
+    });
+  }
+
+  /** Non-Claude providers cannot drain hive inbox; hand direct mail to the
+   *  renderer so it can queue a terminal work order for the target PTY. */
+  private emitTerminalHandoff(msg: HiveMessage, targetId: string): void {
+    this.emit?.('hive:terminalHandoff', {
+      id: msg.id,
+      from: msg.from,
+      to: targetId,
+      act: msg.act,
+      subject: msg.subject,
+      body: msg.body,
+      createdAt: msg.created_at
     });
   }
 

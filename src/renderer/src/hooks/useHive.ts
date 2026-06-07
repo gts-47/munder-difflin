@@ -91,6 +91,25 @@ function enrichTaskPrompt(text: string): string {
   ].join('\n');
 }
 
+function terminalWorkOrderPrompt(msg: {
+  from: string;
+  subject: string;
+  body: string;
+}): string {
+  return [
+    'WORK ORDER FROM HIVE',
+    `From: ${msg.from}`,
+    `Subject: ${msg.subject}`,
+    '',
+    msg.body,
+    '',
+    'Notes:',
+    '- This arrived through your terminal because this provider does not support hive inbox.',
+    '- Work in your current cwd.',
+    '- When done, report changes, validation, blockers, and next step in this terminal.'
+  ].join('\n');
+}
+
 /** Tool name → where the avatar walks + what it carries. */
 const TOOL_STATION: Record<string, { station: StationKind; carry?: ToolKind }> = {
   Read: { station: 'shelf', carry: 'Read' },
@@ -400,6 +419,29 @@ export function useHive(config: HarnessConfig | null): void {
       useStore.getState().updateAgent(agentId, { contextTokens: tokens, contextLimit: limit, progress });
     });
   }, []);
+
+  // 2e) Non-Claude providers cannot drain hive inbox. Direct hive mail to them
+  //     arrives here as a terminal work order and is queued through the same
+  //     idle-only PTY drain as human-composed messages.
+  useEffect(() => {
+    if (!config?.onboardingComplete) return;
+    return window.cth.onHiveTerminalHandoff((msg) => {
+      const { agents, enqueueMessage } = useStore.getState();
+      const target = agents.find((a) => a.id === msg.to);
+      if (target?.ptyId) {
+        enqueueMessage(target.id, terminalWorkOrderPrompt(msg));
+        return;
+      }
+      enqueueMessage(
+        GOD_ID,
+        [
+          `Terminal handoff failed for ${msg.to}: ${msg.subject}`,
+          '',
+          `Message ${msg.id} from ${msg.from} could not be queued because ${msg.to} has no live PTY. Route it manually or respawn the agent.`
+        ].join('\n')
+      );
+    });
+  }, [config?.onboardingComplete]);
 
   // 3) Wake idle agents holding unread inbox messages. The assistant is
   //    send-only (it never receives inbox mail), so it's excluded.

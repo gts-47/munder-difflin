@@ -60,6 +60,18 @@ export interface HiveRouteEvent {
   needsHuman: boolean;
 }
 
+/** A direct hive message addressed to a provider that cannot drain hive inbox.
+ *  The renderer turns this into a queued terminal work order for that agent. */
+export interface HiveTerminalHandoffEvent {
+  id: string;
+  from: string;
+  to: string;
+  act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
+  subject: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface SpawnPtyOptions {
   id: string;
   cwd: string;
@@ -391,6 +403,11 @@ const api = {
     const listener = (_e: IpcRendererEvent, payload: HiveRouteEvent) => cb(payload);
     ipcRenderer.on('hive:message', listener);
     return () => ipcRenderer.removeListener('hive:message', listener);
+  },
+  onHiveTerminalHandoff: (cb: (e: HiveTerminalHandoffEvent) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: HiveTerminalHandoffEvent) => cb(payload);
+    ipcRenderer.on('hive:terminalHandoff', listener);
+    return () => ipcRenderer.removeListener('hive:terminalHandoff', listener);
   },
 
   // ─── Quit confirmation ───────────────────────────────────────────────────
