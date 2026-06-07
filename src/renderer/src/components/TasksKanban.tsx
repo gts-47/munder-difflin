@@ -76,6 +76,10 @@ export function TasksKanban({ onAssign }: { onAssign: (prefill: string) => void 
   const agents = useStore((s) => s.agents);
   const [tasks, setTasks] = useState<HiveTask[]>([]);
   const [adding, setAdding] = useState(false);
+  // Detail view: cards show just the title — clicking one opens the full
+  // breakdown (description contract, assignee, deps, controls). Stored as the
+  // task ID so the 5s poll keeps the open detail fresh.
+  const [detailId, setDetailId] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
@@ -119,7 +123,7 @@ export function TasksKanban({ onAssign }: { onAssign: (prefill: string) => void 
       : undefined;
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--cth-paper-200)', position: 'relative' }}>
       {/* Toolbar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', flexShrink: 0,
@@ -176,9 +180,9 @@ export function TasksKanban({ onAssign }: { onAssign: (prefill: string) => void 
                   <TaskCard
                     key={t.id}
                     task={t}
+                    accent={col.accent}
                     assigneeName={nameFor(t.assignee)}
-                    onMove={(s) => moveTask(t.id, s)}
-                    onAssign={() => assign(t)}
+                    onOpen={() => setDetailId(t.id)}
                   />
                 ))}
               </div>
@@ -186,64 +190,171 @@ export function TasksKanban({ onAssign }: { onAssign: (prefill: string) => void 
           );
         })}
       </div>
+
+      {detailId && (() => {
+        const t = tasks.find((x) => x.id === detailId);
+        if (!t) return null;
+        return (
+          <TaskDetail
+            task={t}
+            all={tasks}
+            assigneeName={nameFor(t.assignee)}
+            onMove={(s) => moveTask(t.id, s)}
+            onAssign={() => { assign(t); setDetailId(null); }}
+            onClose={() => setDetailId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }
 
 // ─── Card ────────────────────────────────────────────────────────────────────
+// Deliberately minimal — a colored status edge, the title, a whisper of an
+// assignee. Everything else (the full contract, deps, controls) lives in the
+// detail view a click away: a kanban card can carry a title at most.
 
-function TaskCard({ task, assigneeName, onMove, onAssign }: {
+function TaskCard({ task, accent, assigneeName, onOpen }: {
   task: HiveTask;
+  accent: string;
+  assigneeName?: string;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      onClick={onOpen}
+      title="open task details"
+      style={{
+        display: 'flex', alignItems: 'stretch', gap: 0, padding: 0,
+        border: 'none', cursor: 'pointer', textAlign: 'left',
+        background: 'var(--cth-paper-100)',
+        boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)'
+      }}
+    >
+      <span style={{ width: 4, flexShrink: 0, background: accent, boxShadow: 'inset -1px 0 0 var(--cth-ink-700)' }} />
+      <span style={{ flex: 1, minWidth: 0, padding: '6px 7px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{
+          fontFamily: 'var(--cth-font-ui)', fontSize: 13, lineHeight: '16px',
+          color: 'var(--cth-ink-900)',
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+        }}>{task.title}</span>
+        {assigneeName && (
+          <span style={{ fontSize: 10, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-display)' }}>
+            {assigneeName.toUpperCase()}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+// ─── Detail view ─────────────────────────────────────────────────────────────
+// The full breakdown of one task: status, assignee, priority, the complete
+// description (the god writes 4-part dispatch contracts in there — preserved
+// line by line), dependencies resolved to their titles, and the move/assign
+// controls that used to crowd every card.
+
+function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose }: {
+  task: HiveTask;
+  all: HiveTask[];
   assigneeName?: string;
   onMove: (s: Status) => void;
   onAssign: () => void;
+  onClose: () => void;
 }) {
-  const pr = Math.max(1, Math.min(5, task.priority));
+  const col = COLUMNS.find((c) => c.key === task.status) ?? COLUMNS[0];
+  const deps = task.dependsOn
+    .map((id) => all.find((t) => t.id === id))
+    .filter((t): t is HiveTask => !!t);
+  const created = new Date(task.createdAt);
   return (
-    <div style={{
-      padding: 7, background: 'var(--cth-paper-100)',
-      boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)', display: 'flex', flexDirection: 'column', gap: 5
-    }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-        <PriorityDots level={pr} />
-        <span style={{
-          flex: 1, minWidth: 0, fontFamily: 'var(--cth-font-ui)', fontSize: 13,
-          lineHeight: '16px', color: 'var(--cth-ink-900)'
-        }}>{task.title}</span>
-      </div>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'absolute', inset: 0, zIndex: 50,
+        background: 'rgba(26, 19, 32, 0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: '94%', maxHeight: '92%', display: 'flex' }}>
+        <PixelPanel variant="dialog" title="TASK" noPadding style={{ display: 'flex', flexDirection: 'column', width: '100%', minHeight: 0 }}>
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10, minHeight: 0, overflowY: 'auto' }}>
+            {/* Title under a status-colored bar */}
+            <div style={{ borderLeft: `4px solid ${col.accent}`, paddingLeft: 8 }}>
+              <div style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 15, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                {task.title}
+              </div>
+            </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-        {assigneeName
-          ? <PixelBadge status="working" label={assigneeName} />
-          : <span style={{ fontSize: 11, color: 'var(--cth-ink-300)' }}>unassigned</span>}
-        {task.dependsOn.length > 0 && (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 3, padding: '1px 6px 0',
-            background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
-            fontFamily: 'var(--cth-font-ui)', fontSize: 11, color: 'var(--cth-ink-700)'
-          }} title={`Depends on ${task.dependsOn.length} task(s)`}>
-            <Icon name="arrow-right" /> {task.dependsOn.length}
-          </span>
-        )}
-      </div>
+            {/* Fact row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{
+                fontFamily: 'var(--cth-font-display)', fontSize: 8, padding: '2px 6px 1px',
+                background: col.accent, color: 'var(--cth-ink-900)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-900)'
+              }}>{col.label}</span>
+              {assigneeName
+                ? <PixelBadge status="working" label={assigneeName} />
+                : <span style={{ fontSize: 11, color: 'var(--cth-ink-300)' }}>unassigned</span>}
+              <PriorityDots level={Math.max(1, Math.min(5, task.priority))} />
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-display)' }}>
+                {isNaN(created.getTime()) ? '' : created.toLocaleString()}
+              </span>
+            </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-        <select
-          value={task.status}
-          onChange={(e) => onMove(e.target.value as Status)}
-          style={{
-            flex: 1, padding: '2px 4px', background: 'var(--cth-paper-100)', border: 'none',
-            boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)',
-            fontSize: 11, color: 'var(--cth-ink-900)', cursor: 'pointer'
-          }}
-        >
-          {COLUMNS.map((c) => (<option key={c.key} value={c.key}>{c.label.toLowerCase()}</option>))}
-        </select>
-        <PixelButton variant="secondary" size="sm" onClick={onAssign}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            <Icon name="arrow-right" /> assign
-          </span>
-        </PixelButton>
+            {/* The contract — preserved line by line */}
+            <div style={{
+              padding: 10, background: 'var(--cth-paper-100)',
+              boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+              fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '18px',
+              color: 'var(--cth-ink-900)', whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+            }}>
+              {task.description?.trim() || <span style={{ color: 'var(--cth-ink-300)' }}>(no description on this card)</span>}
+            </div>
+
+            {/* Dependencies, resolved to titles */}
+            {deps.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontFamily: 'var(--cth-font-display)', fontSize: 8, color: 'var(--cth-ink-500)' }}>
+                  DEPENDS ON
+                </div>
+                {deps.map((d) => {
+                  const dc = COLUMNS.find((c) => c.key === d.status) ?? COLUMNS[0];
+                  return (
+                    <div key={d.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '3px 6px',
+                      background: 'var(--cth-cream-200)', boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                      fontSize: 12, color: 'var(--cth-ink-700)'
+                    }}>
+                      <span style={{ width: 8, height: 8, background: dc.accent, boxShadow: 'inset 0 0 0 1px var(--cth-ink-900)', flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.title}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Controls */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select
+                value={task.status}
+                onChange={(e) => onMove(e.target.value as Status)}
+                style={{
+                  flex: 1, padding: '4px 6px', background: 'var(--cth-paper-100)', border: 'none',
+                  boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)', fontFamily: 'var(--cth-font-ui)',
+                  fontSize: 12, color: 'var(--cth-ink-900)', cursor: 'pointer'
+                }}
+              >
+                {COLUMNS.map((c) => (<option key={c.key} value={c.key}>{c.label.toLowerCase()}</option>))}
+              </select>
+              <PixelButton variant="secondary" size="sm" onClick={onAssign}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                  <Icon name="arrow-right" /> assign
+                </span>
+              </PixelButton>
+              <PixelButton variant="ghost" size="sm" onClick={onClose}>close</PixelButton>
+            </div>
+          </div>
+        </PixelPanel>
       </div>
     </div>
   );
