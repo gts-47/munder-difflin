@@ -1,24 +1,39 @@
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import * as pty from 'node-pty';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
 import { resolveCommand, userShellPath } from './shellEnv';
+import { projectDir } from './transcript';
 
 /**
  * Michael's silent prep assistant.
  *
- * Runs a one-shot, headless `claude -p` session (Haiku) that NEVER appears on
- * the office floor or in the agent list. Given a short, possibly vague
- * instruction the user parked for Michael, it locates the relevant project
- * directory (it starts in Michael's home and can read every registered repo),
- * gathers concrete context read-only, and rewrites the instruction into a
- * single self-contained prompt Michael can execute autonomously.
+ * Runs a HIDDEN interactive claude session (Haiku) that NEVER appears on the
+ * office floor, agent list, or registry. Given a short, possibly vague
+ * instruction the user parked for Michael, it explores read-only and rewrites
+ * it into a self-contained context-rich prompt Michael can execute immediately.
  *
- * The result text replaces the queued message, so the existing queue→PTY flush
- * delivers the enriched prompt to Michael with no extra plumbing.
+ * Uses an interactive PTY (not `claude -p`) so enrichment draws from the
+ * user's normal interactive plan quota — not the separate Agent SDK credit that
+ * moves to a claim-required pool from 2026-06-15.
+ *
+ * Session lifecycle: spawn → boot quiet → bracketed-paste prompt + \r →
+ * idle-settle → transcript extract → kill. Ephemeral per-enrich (no /clear
+ * needed; each call gets a fresh session and its own JSONL).
  */
 
-/** Haiku 4.5 — fast, cheap, and works without usage credits by default. */
+/** Haiku 4.5 — fast, draws from interactive plan quota (not Agent SDK credit). */
 const ASSISTANT_MODEL = 'claude-haiku-4-5';
 
+/** ms of PTY silence that signals the TUI is ready for input (boot complete). */
+const BOOT_QUIET_MS = 1500;
+/** Hard cap: send the prompt at most this many ms after spawn (handles stalls). */
+const BOOT_MAX_MS = 7000;
+/**
+ * ms of PTY silence after the prompt that signals response is complete.
+ * Includes a small write-to-disk margin so the JSONL record is flushed.
+ */
+const IDLE_SETTLE_MS = 3500;
+/** Absolute safety net for the whole enrichment round-trip. */
 const DEFAULT_TIMEOUT_MS = 180_000;
 
 export interface EnrichRequest {
@@ -30,7 +45,7 @@ export interface EnrichRequest {
   repos?: string[];
   /** Base claude command from config (only its binary name is used). */
   command?: string;
-  /** Model override; defaults to Sonnet 1M. */
+  /** Model override; defaults to Haiku 4.5. */
   model?: string;
   /** Hard cap so a runaway run can't wedge the queue. */
   timeoutMs?: number;
@@ -77,18 +92,49 @@ function buildTaskPrompt(message: string, cwd: string, repos: string[]): string 
   ].join('\n');
 }
 
-/** Pull the final assistant text out of `claude -p --output-format json`. */
-function parsePrompt(stdout: string): string | null {
-  const raw = stdout.trim();
-  if (!raw) return null;
+/**
+ * Extract the last assistant text block from the transcript JSONL written
+ * at or after `spawnedAt`. Looks in the projectDir for cwd, picks the file
+ * with the most-recent mtime (the one this session wrote), and returns the
+ * final text content block.
+ */
+function extractLastAssistantText(cwd: string, spawnedAt: number): string | null {
   try {
-    const obj = JSON.parse(raw) as { result?: unknown; text?: unknown };
-    const text = typeof obj.result === 'string' ? obj.result
-      : typeof obj.text === 'string' ? obj.text
-      : null;
-    if (text && text.trim()) return text.trim();
-  } catch { /* not JSON — fall back to the raw stdout below */ }
-  return raw;
+    const dir = projectDir(cwd);
+    if (!existsSync(dir)) return null;
+
+    const candidates: { f: string; mtime: number }[] = [];
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith('.jsonl')) continue;
+      try {
+        const mtime = statSync(path.join(dir, f)).mtimeMs;
+        // Include files touched up to 5 s before spawn to handle pre-existing
+        // sessions; we want the one written by this call, so we sort by mtime
+        // and take the newest.
+        if (mtime >= spawnedAt - 5000) candidates.push({ f, mtime });
+      } catch { /* file removed between readdir and stat — skip */ }
+    }
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => b.mtime - a.mtime);
+
+    const lines = readFileSync(path.join(dir, candidates[0].f), 'utf8').split('\n');
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+      let rec: { type?: unknown; message?: { content?: unknown[] } };
+      try { rec = JSON.parse(trimmed); } catch { continue; }
+      if (rec.type !== 'assistant') continue;
+      const content = rec.message?.content;
+      if (!Array.isArray(content)) continue;
+      for (let j = content.length - 1; j >= 0; j--) {
+        const block = content[j] as { type?: unknown; text?: unknown };
+        if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+          return block.text.trim();
+        }
+      }
+    }
+    return null;
+  } catch { return null; }
 }
 
 export function enrichMessage(req: EnrichRequest): Promise<EnrichResult> {
@@ -103,61 +149,92 @@ export function enrichMessage(req: EnrichRequest): Promise<EnrichResult> {
     const binary = (req.command || 'claude').trim().split(/\s+/)[0] || 'claude';
     const exe = resolveCommand(binary);
     const repos = (req.repos ?? []).filter((r) => r && existsSync(r) && r !== req.cwd);
-    const taskPrompt = buildTaskPrompt(message, req.cwd, req.repos ?? []);
+    const taskPrompt = buildTaskPrompt(message, req.cwd, repos);
 
-    // We build the flag set ourselves (rather than reusing config's command
-    // string) so the assistant's behaviour is fixed regardless of the user's
-    // autoMode / defaultCommand: headless print mode, Sonnet 1M, read-only.
-    const args = [
-      '-p', taskPrompt,
+    const args: string[] = [
       '--model', req.model || ASSISTANT_MODEL,
-      '--output-format', 'json',
       '--permission-mode', 'bypassPermissions',
-      // Context gathering only — the assistant must never mutate a repo. These
-      // are passed as separate args because the CLI flag is variadic (<tools...>).
-      '--disallowedTools', 'Edit', 'Write', 'NotebookEdit'
+      '--disallowedTools', 'Edit', 'Write', 'NotebookEdit',
     ];
-    // --add-dir comes last so it terminates the variadic --disallowedTools list.
+    // --add-dir follows --disallowedTools; the leading -- signals the end of
+    // the variadic tool list to the CLI parser.
     for (const r of repos) { args.push('--add-dir', r); }
 
-    let child;
+    const spawnedAt = Date.now();
+    let ptyProc: pty.IPty;
     try {
-      child = spawn(exe, args, {
+      ptyProc = pty.spawn(exe, args, {
+        name: 'xterm-color',
+        cols: 220,
+        rows: 50,
         cwd: req.cwd,
         env: {
           ...process.env,
           PATH: userShellPath(),
-          ...(req.env ?? {})
+          ...(req.env ?? {}),
         } as Record<string, string>,
-        stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) {
       resolve({ ok: false, error: e instanceof Error ? e.message : String(e) });
       return;
     }
 
-    let stdout = '';
-    let stderr = '';
     let settled = false;
+    let promptSent = false;
+    let bootTimer: NodeJS.Timeout | null = null;
+    let idleTimer: NodeJS.Timeout | null = null;
+    // Declared before finish() so the closure can reference them.
+    let bootMaxTimer: NodeJS.Timeout;
+    let globalTimer: NodeJS.Timeout;
+
+    const kill = () => { try { ptyProc.kill(); } catch { /* noop */ } };
+
     const finish = (r: EnrichResult) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+      clearTimeout(bootMaxTimer);
+      clearTimeout(globalTimer);
+      kill();
       resolve(r);
     };
 
-    const timer = setTimeout(() => {
-      try { child.kill('SIGKILL'); } catch { /* noop */ }
-      finish({ ok: false, error: 'enrichment timed out' });
-    }, req.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    const captureAndFinish = () => {
+      const text = extractLastAssistantText(req.cwd, spawnedAt);
+      finish(text
+        ? { ok: true, prompt: text }
+        : { ok: false, error: 'no assistant response found in transcript' });
+    };
 
-    child.stdout?.on('data', (d) => { stdout += d.toString(); });
-    child.stderr?.on('data', (d) => { stderr += d.toString(); });
-    child.on('error', (e) => finish({ ok: false, error: e.message }));
-    child.on('close', (code) => {
-      const prompt = parsePrompt(stdout);
-      if (prompt) { finish({ ok: true, prompt }); return; }
-      finish({ ok: false, error: stderr.trim() || `assistant exited ${code ?? '?'} with no output` });
+    const sendPrompt = () => {
+      if (settled || promptSent) return;
+      promptSent = true;
+      if (bootTimer) { clearTimeout(bootTimer); bootTimer = null; }
+      // Bracketed paste + enter (same mechanism as submitToPty in useHive.ts).
+      ptyProc.write(`\x1b[200~${taskPrompt}\x1b[201~`);
+      setTimeout(() => { if (!settled) ptyProc.write('\r'); }, 140);
+    };
+
+    bootMaxTimer = setTimeout(sendPrompt, BOOT_MAX_MS);
+    globalTimer = setTimeout(
+      () => finish({ ok: false, error: 'enrichment timed out' }),
+      req.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    );
+
+    ptyProc.onData(() => {
+      if (!promptSent) {
+        // Boot phase: reset quiet timer on every byte; send prompt once quiet.
+        if (bootTimer) clearTimeout(bootTimer);
+        bootTimer = setTimeout(sendPrompt, BOOT_QUIET_MS);
+      } else {
+        // Response phase: reset idle timer; capture once output goes quiet.
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(captureAndFinish, IDLE_SETTLE_MS);
+      }
     });
+
+    // If the session exits cleanly before we detect idle, try to capture anyway.
+    ptyProc.onExit(() => { if (!settled) captureAndFinish(); });
   });
 }
