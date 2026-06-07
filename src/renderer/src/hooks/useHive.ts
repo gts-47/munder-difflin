@@ -303,6 +303,15 @@ export function useHive(config: HarnessConfig | null): void {
         // A turn is in progress (prompt submitted / tool just finished) — keep
         // it working so it doesn't flicker idle between tool calls.
         if (!breakerArmed) updateAgent(e.agentId, { status: 'working' });
+      } else if (e.event === 'PreInvocation') {
+        // Antigravity (agy): the model is being called — it's thinking/working.
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'working', action: 'thinking' });
+      } else if (e.event === 'PostInvocation') {
+        // agy's per-turn boundary. Unlike Claude, agy's Stop fires only on process
+        // EXIT, so without this an agy worker would never register as idle and the
+        // inbox-wake nudge (idle-only) could never reach it — its mail would sit
+        // undrained. Treat it as idle; a follow-up tool/turn re-sets working.
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined });
       } else if (e.event === 'Stop' || e.event === 'SubagentStop') {
         // A blocked Stop means the agent is being re-engaged to process its
         // inbox — it's NOT idle, so keep it working until it genuinely stops.
