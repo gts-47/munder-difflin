@@ -21,7 +21,7 @@ import type { UsageProvider } from './usage';
 import { MemoryManager } from './memory';
 import { MemoryReflector, type ReflectSettings } from './reflect';
 import { PersistStore } from './db';
-import { readAgentUsage, readContextTokens } from './transcript';
+import { readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
 import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
 import { WebhookServer, type WebhookInbound, type WebhookTaskStatus } from './webhook';
@@ -1197,7 +1197,7 @@ function createWindow(): void {
 }
 
 // ─── IPC: pty lifecycle ─────────────────────────────────────────────────────
-ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; provider?: AgentProvider }) => {
+ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; resumeSessionId?: string; provider?: AgentProvider }) => {
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
   }
@@ -1213,6 +1213,11 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   // its own worktree on an `agent/<id>` branch so it can't clobber other agents'
   // (or the user's) working tree. Best-effort — a failure falls back to the
   // shared cwd rather than blocking the spawn.
+  // NOTE (tracked, not yet hardened): the restore flow passes isolate:false and
+  // re-enters the existing worktree by cwd, so it never reaches here. But a stale
+  // `isolate:true` recipe spawned against an already-existing worktree path would
+  // make addWorktree below conflict (path/branch exists) and fall back to the base
+  // cwd — reuse-existing-worktree handling here is the follow-up.
   if (opts.isolate === true && await isRepo(opts.cwd)) {
     try {
       const origCwd = opts.cwd;
@@ -1260,6 +1265,12 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   }
   // Long-run guardrails + tiering (Lane A #6.4/#6.6). All additive to the args
   // already assembled (incl. the hive injection); an explicit choice always wins.
+  // Set when an explicit Add Agent "resume session" id couldn't be located and we
+  // silently fell back to a fresh session — returned so the dialog can surface it.
+  let resumeNotFound = false;
+  // Set when `--resume` was actually attached (explicit id or restore-on-restart),
+  // so the renderer can skip re-orienting a god/assistant that resumed its thread.
+  let didResume = false;
   // Claude-only — these are Claude Code flags; other CLIs carry their own flags
   // in the command string the renderer already built.
   if (opts.hive && claudeProvider) {
@@ -1275,6 +1286,28 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
     if (typeof cfg.maxTurns === 'number' && cfg.maxTurns > 0 && !args.includes('--max-turns')) {
       args.push('--max-turns', String(cfg.maxTurns));
     }
+    // Resume: an explicit session id (Add Agent "resume session" field, #2) wins,
+    // else this agent's last recorded session (#1 restore-on-restart / #6.6a).
+    // Seed the transcript into the target cwd's Claude project dir first — Claude
+    // keys sessions by cwd, so a session started elsewhere is invisible until its
+    // `.jsonl` is copied across. Only attach `--resume` if the transcript is
+    // actually present (already or after the copy); otherwise fall back to a fresh
+    // session rather than launching a `--resume` against a missing id.
+    const explicitSid = typeof opts.resumeSessionId === 'string' ? opts.resumeSessionId.trim() : '';
+    const sid = explicitSid || (opts.resume === true ? hive.lastSession(opts.hive.id) : undefined);
+    if (sid && !args.includes('--resume')) {
+      if (seedSessionTranscript(opts.cwd, sid)) {
+        args.push('--resume', sid);
+        didResume = true;
+      } else if (explicitSid) {
+        // The user typed a session id in the Add Agent dialog but it isn't in any
+        // Claude project dir — we fall back to a FRESH session rather than a broken
+        // `--resume`. Make that non-silent: warn on the floor and flag it back to
+        // the renderer so the dialog can tell the user 'started fresh'.
+        console.warn(`[resume] session "${explicitSid}" not found in any Claude project dir — starting a fresh session`);
+        resumeNotFound = true;
+      }
+    }
     opts.args = args;
   }
   // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude
@@ -1282,7 +1315,10 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   // comes from hook payloads (agy's conversationId flows through the bridge), so
   // a restored worker continues its prior CLI session. Only when requested AND a
   // prior id exists for this agent.
-  if (opts.hive && opts.resume === true) {
+  // Claude resume — incl. transcript seeding + only-attach-when-present — is
+  // handled in the Claude-only block above; this generic flag path covers the
+  // other CLIs (it must not blindly attach `--resume` when the seed failed).
+  if (opts.hive && opts.resume === true && !claudeProvider) {
     const rf = providerPreset(provider).resumeFlag;
     const sid = hive.lastSession(opts.hive.id);
     if (rf && sid) {
@@ -1309,7 +1345,12 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   }
   const res = ptyManager.spawn(opts);
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
-  return res;
+  // Hand the resolved worktree path back to the renderer so it can persist it on
+  // the agent (only set when isolation actually provisioned a worktree above).
+  // The restore flow re-enters this exact worktree (cwd = worktreePath) so a
+  // restored isolated agent resumes in the CORRECT checkout, not the base repo.
+  const worktreePath = worktreePaths.get(opts.id);
+  return { ...res, ...(worktreePath ? { worktreePath } : {}), ...(resumeNotFound ? { resumeNotFound: true } : {}), ...(didResume ? { resumed: true } : {}) };
 });
 ipcMain.handle('pty:write', (_evt, id: string, data: string) => {
   if (typeof id !== 'string' || typeof data !== 'string') return { ok: false, error: 'invalid args' };
@@ -1329,6 +1370,12 @@ ipcMain.handle('pty:kill', (_evt, id: string) => {
   return res;
 });
 ipcMain.handle('pty:list', () => ptyManager.list());
+
+// Resolve a pasted Claude session id to the cwd it originally ran in, so the Add
+// Agent dialog can auto-fill the folder for a resume (#2 zero-step resume). Reads
+// the cwd from a transcript record; null when the id is invalid/unknown.
+ipcMain.handle('session:resolveCwd', (_evt, sessionId: unknown) =>
+  (typeof sessionId === 'string' ? resolveSessionCwd(sessionId) : null));
 
 // ─── IPC: clipboard ─────────────────────────────────────────────────────────
 ipcMain.handle('app:copyToClipboard', (_evt, text: unknown) => {

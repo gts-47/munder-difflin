@@ -110,8 +110,14 @@ export interface SpawnPtyOptions {
   /** When true (and cwd is a git repo), spawn the agent in its own git worktree. */
   isolate?: boolean;
   /** When true, continue the agent's prior CLI session if one was recorded
-   *  (provider-aware: Claude `--resume`, Antigravity `--conversation`). */
+   *  (provider-aware: Claude `--resume`, Antigravity `--conversation`). For
+   *  Claude the main process looks up the session id from the hive registry and
+   *  seeds its transcript into the cwd's project dir (#1 — restore on restart). */
   resume?: boolean;
+  /** Explicit Claude session id to resume (#2 — Add Agent "resume session"). The
+   *  main process seeds that session's `.jsonl` into the target cwd's project dir
+   *  (copying it from wherever it lives) and launches `claude --resume <id>`. */
+  resumeSessionId?: string;
 }
 
 export interface PtyExit { exitCode: number; signal?: number | undefined }
@@ -306,7 +312,7 @@ const api = {
   version: __APP_VERSION__,
 
   // ─── PTY ─────────────────────────────────────────────────────────────────
-  spawnPty: (opts: SpawnPtyOptions): Promise<{ ok: boolean; error?: string }> =>
+  spawnPty: (opts: SpawnPtyOptions): Promise<{ ok: boolean; error?: string; worktreePath?: string; resumeNotFound?: boolean; resumed?: boolean }> =>
     ipcRenderer.invoke('pty:spawn', opts),
   writePty: (id: string, data: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:write', id, data),
@@ -316,6 +322,10 @@ const api = {
     ipcRenderer.invoke('pty:kill', id),
   listPtys: (): Promise<Array<{ id: string; cwd: string; command: string; pid: number }>> =>
     ipcRenderer.invoke('pty:list'),
+  /** Resolve a Claude session id to the cwd it originally ran in (Add Agent
+   *  resume auto-fill), or null if the id is invalid/unknown. */
+  resolveSessionCwd: (sessionId: string): Promise<string | null> =>
+    ipcRenderer.invoke('session:resolveCwd', sessionId),
   onPtyData: (id: string, cb: (data: string) => void): (() => void) => {
     const channel = `pty:data:${id}`;
     const listener = (_e: IpcRendererEvent, data: string) => cb(data);
