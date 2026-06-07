@@ -1062,8 +1062,11 @@ process.stdin.on('end', () => {
   };
   let resp = '';
   const done = () => {
-    // Translate the HookServer's Claude-shaped reply into agy's contract.
-    let out = {};
+    // Translate the HookServer's Claude-shaped reply into agy's contract. CRITICAL:
+    // agy treats ANY object written to stdout as a decision and FAIL-CLOSES (an
+    // empty/decision-less object = DENY). So emit JSON ONLY when there's a real
+    // directive (deny/block/steer); otherwise write NOTHING — no output = allow.
+    let out = null;
     try {
       const r = JSON.parse(resp || '{}');
       if (r.decision === 'block') out = { decision: 'block', reason: r.reason, stopReason: r.reason, systemMessage: r.reason };
@@ -1071,7 +1074,7 @@ process.stdin.on('end', () => {
       else if (r.continue === false) out = { decision: 'block', stopReason: r.stopReason };
       else if (r.hookSpecificOutput && r.hookSpecificOutput.additionalContext) out = { systemMessage: r.hookSpecificOutput.additionalContext };
     } catch (_) {}
-    try { process.stdout.write(JSON.stringify(out)); } catch (_) {}
+    if (out) { try { process.stdout.write(JSON.stringify(out)); } catch (_) {} }
     process.exit(0);
   };
   try {
