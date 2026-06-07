@@ -414,6 +414,14 @@ const api = {
     ipcRenderer.on('hive:message', listener);
     return () => ipcRenderer.removeListener('hive:message', listener);
   },
+  /** Register a listener for hive tasks routed to non-Claude agents (e.g.
+   *  Codex). Main emits this instead of bouncing; the renderer enqueues the
+   *  raw text so the drain effect types it into the agent's REPL when idle. */
+  onHiveEnqueue: (cb: (e: { targetId: string; text: string }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { targetId: string; text: string }) => cb(payload);
+    ipcRenderer.on('hive:enqueueToAgent', listener);
+    return () => ipcRenderer.removeListener('hive:enqueueToAgent', listener);
+  },
 
   // ─── Quit confirmation ───────────────────────────────────────────────────
   onCloseRequested: (cb: (info: { ptyCount: number }) => void): (() => void) => {

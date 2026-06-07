@@ -564,11 +564,12 @@ export class HiveManager {
     for (const t of targets) {
       const target = reg.agents[t];
       if (target && !isClaudeProvider(target.provider ?? 'claude')) {
-        this.deliver({
-          ...msg,
-          to: godId,
-          subject: `[bounced — "${t}" uses ${target.provider ?? 'custom'}; route via its terminal, not hive inbox] ${msg.subject}`
-        }, godId);
+        // Route non-Claude (e.g. Codex) agent tasks directly to their REPL
+        // instead of bouncing. The renderer enqueues the raw text; the drain
+        // effect types it into the agent's terminal when it next goes idle.
+        // Codex gets no inbox nudge or /compact — only the task body verbatim.
+        const text = [msg.subject, '', msg.body].filter(Boolean).join('\n');
+        this.emit?.('hive:enqueueToAgent', { targetId: t, text });
         continue;
       }
       this.deliver(msg, t);

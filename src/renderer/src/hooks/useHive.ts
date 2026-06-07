@@ -460,6 +460,19 @@ export function useHive(config: HarnessConfig | null): void {
     });
   }, [config?.onboardingComplete]);
 
+  // 5b) Pipe hive tasks addressed to non-Claude agents (e.g. Codex) into their
+  //     terminal queues. When main routes a message to a non-claude provider it
+  //     emits 'hive:enqueueToAgent' instead of bouncing; we enqueue the raw
+  //     task text here so effect #4 types it into the REPL when the agent idles.
+  //     No inbox nudge, no /compact — just the verbatim subject+body text.
+  useEffect(() => {
+    if (!config?.onboardingComplete) return;
+    return window.cth.onHiveEnqueue?.((msg) => {
+      if (!msg?.targetId || !msg?.text?.trim()) return;
+      useStore.getState().enqueueMessage(msg.targetId, msg.text.trim());
+    });
+  }, [config?.onboardingComplete]);
+
   // 6) Auto-compact (scheduled standup). Main fires this per tick; we queue a
   //    /compact for each live agent so the drain (#4) delivers it only when the
   //    agent is idle — never jamming a working terminal. Deduped: if a /compact
