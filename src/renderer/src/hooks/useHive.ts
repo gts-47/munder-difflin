@@ -65,7 +65,12 @@ const writeChains = new Map<string, Promise<void>>();
 function submitToPty(ptyId: string, text: string, settleMs = 250): Promise<void> {
   const prev = writeChains.get(ptyId) ?? Promise.resolve();
   const next = prev.catch(() => { /* a failed prior write must not stall the chain */ }).then(async () => {
-    await window.cth.writePty(ptyId, `\x1b[200~${text}\x1b[201~`);
+    // Bracketed paste (ESC[200~ … ESC[201~) only matters for MULTI-LINE text, so a
+    // stray "\n" doesn't submit early (#24). Single-line text (nudges, slash
+    // commands) is sent raw — some TUIs (Antigravity's agy) treat the paste
+    // markers as literal input and never submit, so skipping them is more robust.
+    const payload = text.includes('\n') ? `\x1b[200~${text}\x1b[201~` : text;
+    await window.cth.writePty(ptyId, payload);
     await new Promise((r) => setTimeout(r, 140));
     await window.cth.writePty(ptyId, '\r');
     await new Promise((r) => setTimeout(r, settleMs));
