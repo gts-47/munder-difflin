@@ -503,6 +503,20 @@ let slackReplyServer: SlackReplyServer | null = null;
  *  Request URL after a reopen (Slack reuses it until the server is stopped). */
 let lastSlackUrl: string | undefined;
 
+// ─── Slack done-notifier (Slack-origin task → done → one summary reply) ───────
+/** Polls the shared kanban (hive/tasks.json) for Slack-origin tasks that reach
+ *  'done' and posts ONE summary reply into the originating thread. Lifecycle is
+ *  tied to `slackServer`. OUTBOUND-only: it never touches inbound queue/lanes. */
+let slackDoneTimer: ReturnType<typeof setInterval> | null = null;
+/** Re-entrancy guard so a slow post can't overlap the next tick. */
+let slackDonePolling = false;
+/** Task ids already notified — exactly-once across re-reads AND restarts. Lazily
+ *  loaded from / persisted to `slackDoneNotifiedPath()`. */
+let slackDoneNotified: Set<string> | null = null;
+/** Ids already 'done' when the observer started — baselined (never notified) so a
+ *  summary only ever fires on a live …→done transition, not on pre-existing dones. */
+let slackDoneBaseline: Set<string> | null = null;
+
 /** Absolute path to the bundled `md-slack-reply.cjs` helper. Packaged: under
  *  `process.resourcesPath` (electron-builder extraResources). Dev: the repo's
  *  `resources/` dir, resolved from the app path. */
@@ -516,6 +530,95 @@ function slackReplyScriptPath(): string {
  *  under userData (NOT the git repo, NOT mined into MemPalace). */
 function slackReplyConfigPath(): string {
   return join(app.getPath('userData'), 'slack-reply.json');
+}
+
+/** Ledger of task ids whose done-summary has already been posted. Ids ONLY — no
+ *  secret ever lands here. Under userData (out of the repo, out of MemPalace). */
+function slackDoneNotifiedPath(): string {
+  return join(app.getPath('userData'), 'slack-done-notified.json');
+}
+
+function loadSlackDoneNotified(): Set<string> {
+  try {
+    const arr = JSON.parse(readFileSync(slackDoneNotifiedPath(), 'utf8'));
+    if (Array.isArray(arr)) return new Set(arr.filter((x): x is string => typeof x === 'string'));
+  } catch { /* missing/corrupt → start empty */ }
+  return new Set();
+}
+
+function persistSlackDoneNotified(set: Set<string>): void {
+  try { writeFileSync(slackDoneNotifiedPath(), JSON.stringify([...set])); }
+  catch (e) { console.error('[slack] could not persist done-notify ledger:', e); }
+}
+
+/** The single in-thread summary for a finished task. Sourced from the task's
+ *  result/description (falling back to the title), trimmed Slack-friendly. */
+function slackDoneSummary(task: HiveTask): string {
+  const body = (task.result ?? task.description ?? '').trim();
+  const head = `:white_check_mark: *Done:* ${task.title}`;
+  const text = body ? `${head}\n${body}` : head;
+  return text.length > 2800 ? `${text.slice(0, 2799)}…` : text;
+}
+
+/** One observation pass over the kanban. Posts a summary for any Slack-origin
+ *  task that has newly reached 'done'. Best-effort and self-guarding — it must
+ *  never throw into the timer, and the bot token never leaves this function. */
+async function pollSlackDoneTasks(): Promise<void> {
+  if (slackDonePolling) return;
+  const botToken = readConfig().slackBotToken;
+  if (!botToken) return; // can't post without the token — nothing to do
+  let tasks: HiveTask[];
+  try {
+    const ledger = hive.tasks() as { tasks?: HiveTask[] };
+    tasks = Array.isArray(ledger?.tasks) ? ledger.tasks : [];
+  } catch { return; } // unreadable/missing tasks.json → skip this tick
+
+  const notified = slackDoneNotified ?? (slackDoneNotified = loadSlackDoneNotified());
+
+  // First tick seeds the baseline (ids already done) and posts nothing — so we
+  // only ever fire on a transition observed live this session.
+  if (slackDoneBaseline === null) {
+    slackDoneBaseline = new Set(tasks.filter((t) => t.status === 'done').map((t) => t.id));
+    return;
+  }
+  const baseline = slackDoneBaseline;
+
+  slackDonePolling = true;
+  try {
+    for (const t of tasks) {
+      if (t.status !== 'done') continue;
+      if (baseline.has(t.id) || notified.has(t.id)) continue; // already handled
+      const slack = t.slack;
+      if (!slack || !slack.channel || !slack.thread_ts) continue; // non-Slack-origin → leave alone
+      const res = await postSlackReply({
+        botToken, channel: slack.channel, thread_ts: slack.thread_ts, text: slackDoneSummary(t)
+      });
+      if (res.ok) {
+        notified.add(t.id);
+        persistSlackDoneNotified(notified); // mark-on-success → exactly one delivered reply
+      } else {
+        // Genuinely undelivered → leave unmarked so a later tick retries. Log
+        // the id + error only; never the token or message body.
+        console.error('[slack] done-summary post failed for task', t.id, '-', res.error);
+      }
+    }
+  } finally {
+    slackDonePolling = false;
+  }
+}
+
+/** Begin watching the kanban for Slack-origin done-transitions (idempotent). */
+function startSlackDoneObserver(): void {
+  if (slackDoneTimer) return;
+  slackDoneNotified = loadSlackDoneNotified();
+  slackDoneBaseline = null; // re-seed on the first tick of this session
+  slackDoneTimer = setInterval(() => { void pollSlackDoneTasks(); }, 5000);
+}
+
+/** Stop watching the kanban. Safe to call when not running. */
+function stopSlackDoneObserver(): void {
+  if (slackDoneTimer) { clearInterval(slackDoneTimer); slackDoneTimer = null; }
+  slackDoneBaseline = null;
 }
 
 /** Build a SlackWebhookServer from the current config and start it, replacing
@@ -549,6 +652,9 @@ async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: 
   // the discovery file for the bundled helper. Best-effort: reply path being
   // unavailable must not sink ingestion.
   await startSlackReplyServer();
+  // Begin watching the kanban for Slack-origin tasks that reach 'done', to post
+  // their one summary reply in-thread. OUTBOUND-only; never touches ingestion.
+  startSlackDoneObserver();
   return res;
 }
 
@@ -582,6 +688,7 @@ function stopSlackServer(): void {
   slackServer = null;
   try { slackReplyServer?.stop(); } catch (e) { console.error('[slack] reply stop failed:', e); }
   slackReplyServer = null;
+  stopSlackDoneObserver();
   try { if (existsSync(slackReplyConfigPath())) unlinkSync(slackReplyConfigPath()); } catch { /* noop */ }
 }
 

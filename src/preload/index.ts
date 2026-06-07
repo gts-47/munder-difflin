@@ -42,6 +42,10 @@ export interface HiveTask {
   dependsOn: string[];
   priority: number;
   createdAt: string;
+  /** Outcome summary used for the Slack done-notification. */
+  result?: string;
+  /** Origin thread for a Slack-sourced task (drives the done-summary reply). */
+  slack?: { channel: string; thread_ts: string };
 }
 
 /** A message the router just delivered, with its resolved recipient ids. Drives

@@ -55,6 +55,13 @@ export interface HiveTask {
   dependsOn: string[];
   priority: number;
   createdAt: string;
+  /** Outcome summary, surfaced by the Slack done-notifier when this card reaches
+   *  'done'. Optional; the notifier falls back to description/title. */
+  result?: string;
+  /** Set when this task originated from a Slack message — the thread the
+   *  done-summary reply is posted back into. Consumed OUTBOUND only; populating
+   *  it is the inbound/kanban side's job and does not affect routing. */
+  slack?: { channel: string; thread_ts: string };
 }
 
 export interface AgentMeta {
