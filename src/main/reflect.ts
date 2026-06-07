@@ -20,13 +20,12 @@
  *
  * Runs in the Electron main process.
  */
-import { spawn } from 'node:child_process';
 import {
   existsSync, statSync, readdirSync, readFileSync, writeFileSync,
   mkdirSync, copyFileSync, renameSync, openSync, fsyncSync, closeSync
 } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { resolveCommand, userShellPath } from './shellEnv';
+import { runHiddenClaude } from './hiddenClaude';
 
 /** Total memory.md budget — mirrors the janitor's CONTEXT_BUDGET_BYTES (128 KB). */
 const BUDGET_BYTES = 131_072;
@@ -259,63 +258,40 @@ export class MemoryReflector {
 
   // — the headless LLM call (the only non-deterministic step) —
 
-  private summarize(
+  private async summarize(
     home: string, condensed: string | null, evict: Section[], pinned: string | null
   ): Promise<{ condensed: string; hoist: string[] }> {
-    return new Promise((resolve, reject) => {
-      const binary = (this.getCommand() || 'claude').trim().split(/\s+/)[0] || 'claude';
-      const exe = resolveCommand(binary);
-      const evictText = evict.map((s) => `${s.heading}\n${s.body}`).join('\n\n').trim();
-      const prompt = [
-        CONDENSE_SYSTEM,
-        '',
-        '--- INPUT ---',
-        '(A) CURRENT CONDENSED SUMMARY:',
-        condensed?.trim() || '(none yet)',
-        '',
-        '(B) OLDER SECTIONS BEING EVICTED:',
-        evictText || '(none)',
-        '',
-        '(C) PINNED DURABLE FACTS (context only — do not rewrite):',
-        pinned?.trim() || '(none)'
-      ].join('\n');
+    const evictText = evict.map((s) => `${s.heading}\n${s.body}`).join('\n\n').trim();
+    const prompt = [
+      CONDENSE_SYSTEM,
+      '',
+      '--- INPUT ---',
+      '(A) CURRENT CONDENSED SUMMARY:',
+      condensed?.trim() || '(none yet)',
+      '',
+      '(B) OLDER SECTIONS BEING EVICTED:',
+      evictText || '(none)',
+      '',
+      '(C) PINNED DURABLE FACTS (context only — do not rewrite):',
+      pinned?.trim() || '(none)'
+    ].join('\n');
 
-      const args = [
-        '-p', prompt,
-        '--model', CONDENSE_MODEL,
-        '--output-format', 'json',
-        '--permission-mode', 'bypassPermissions',
-        // Pure text transform — it must never touch the repo or shell out.
-        '--disallowedTools', 'Edit', 'Write', 'NotebookEdit', 'Bash'
-      ];
-
-      let child;
-      try {
-        child = spawn(exe, args, {
-          cwd: home,
-          env: { ...process.env, PATH: userShellPath(), ...this.getMemoryEnv() } as Record<string, string>,
-          stdio: ['ignore', 'pipe', 'pipe']
-        });
-      } catch (e) { reject(e); return; }
-
-      let stdout = '';
-      let stderr = '';
-      let settled = false;
-      const finish = (fn: () => void): void => { if (settled) return; settled = true; clearTimeout(timer); fn(); };
-      const timer = setTimeout(() => {
-        try { child.kill('SIGKILL'); } catch { /* noop */ }
-        finish(() => reject(new Error('condense timed out')));
-      }, DEFAULT_TIMEOUT_MS);
-
-      child.stdout?.on('data', (d) => { stdout += d.toString(); });
-      child.stderr?.on('data', (d) => { stderr += d.toString(); });
-      child.on('error', (e) => finish(() => reject(e)));
-      child.on('close', (code) => finish(() => {
-        const parsed = parseSummary(stdout);
-        if (parsed) { resolve(parsed); return; }
-        reject(new Error(stderr.trim() || `condense exited ${code ?? '?'} with no parseable JSON`));
-      }));
+    const result = await runHiddenClaude(prompt, {
+      model: CONDENSE_MODEL,
+      cwd: home,
+      command: this.getCommand(),
+      // Pure text transform — must never touch the repo or shell out.
+      disallowedTools: ['Edit', 'Write', 'NotebookEdit', 'Bash'],
+      env: this.getMemoryEnv(),
+      timeoutMs: DEFAULT_TIMEOUT_MS,
     });
+
+    if (!result.ok || !result.text) {
+      throw new Error(result.error ?? 'condense: hidden session returned no text');
+    }
+    const parsed = parseSummary(result.text);
+    if (!parsed) throw new Error('condense: response contained no parseable JSON');
+    return parsed;
   }
 }
 
