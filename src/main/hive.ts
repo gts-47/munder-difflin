@@ -69,6 +69,18 @@ export interface HiveTask {
    *  proceed with the human's input (status goes blocked); the harness UI
    *  fills in {a}. The full history stays on the card forever. */
   humanQA?: HumanQA[];
+  /** Outcome summary, surfaced by the Slack done-notifier when this card reaches
+   *  'done'. Optional; the notifier falls back to description/title. */
+  result?: string;
+  /** Set when this task originated from a Slack message — the thread the
+   *  done-summary reply is posted back into. Consumed OUTBOUND only; populating
+   *  it is the inbound/kanban side's job and does not affect routing. */
+  slack?: { channel: string; thread_ts: string };
+  /** Set when this task originated from a generic webhook POST. Stores the SHA-256
+   *  of the capability token (never the raw token — that's returned to the caller
+   *  once and never persisted), so a GET status lookup can match by hashing the
+   *  presented token. Read-only capability: it never widens routing or exposure. */
+  webhook?: { tokenHash: string };
 }
 
 export interface AgentMeta {

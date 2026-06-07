@@ -153,6 +153,15 @@ export interface HarnessConfig {
   /** Local HTTP port the webhook server binds to (default 3847). */
   slackPort?: number;
 
+  // ─── Generic inbound webhook + status API ──────────────────────────────────
+  /** Master toggle for the generic webhook HTTP API (POST → work, GET → status). */
+  webhookEnabled?: boolean;
+  /** App-generated shared secret callers echo in `x-md-webhook-secret`. Never
+   *  logged, and never forwarded into the routed message/card/response. */
+  webhookSecret?: string;
+  /** Local HTTP port the generic webhook server binds to (default 3849). */
+  webhookPort?: number;
+
   // ─── Memory reflection (the janitor's condense half) ───────────────────────
   /** Master toggle for the in-process MemoryReflector. Default on. */
   reflectEnabled?: boolean;
@@ -185,6 +194,9 @@ const DEFAULTS: HarnessConfig = {
   slackBotToken: undefined,
   slackChannelId: undefined,
   slackPort: undefined,
+  webhookEnabled: false,
+  webhookSecret: undefined,
+  webhookPort: undefined,
   // Memory reflection — preventive; nobody is over threshold today, so it sits
   // dark until an agent's memory crosses one of these (the verify gate is the
   // safety for the LLM step). Thresholds DECIDED by god 2026-06-06.

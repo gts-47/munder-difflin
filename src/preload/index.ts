@@ -58,6 +58,13 @@ export interface HiveTask {
   /** First-class human feedback: god appends {q}, the harness UI fills {a};
    *  the full history stays on the card. */
   humanQA?: HumanQA[];
+  /** Outcome summary used for the Slack done-notification. */
+  result?: string;
+  /** Origin thread for a Slack-sourced task (drives the done-summary reply). */
+  slack?: { channel: string; thread_ts: string };
+  /** SHA-256 of the capability token for a generic-webhook-sourced task (drives
+   *  the GET status lookup; the raw token is never persisted). */
+  webhook?: { tokenHash: string };
 }
 
 /** A message the router just delivered, with its resolved recipient ids. Drives
@@ -133,6 +140,9 @@ export interface HarnessConfig {
   slackBotToken?: string;
   slackChannelId?: string;
   slackPort?: number;
+  webhookEnabled?: boolean;
+  webhookSecret?: string;
+  webhookPort?: number;
   costCapUsd?: number;
   costCapTokens?: number;
   agentTokenCaps?: Record<string, number>;
@@ -572,9 +582,9 @@ const api = {
 
   // ─── Slack integration (Slack message → Michael's queue) ─────────────────────
   /** Register a listener for inbound Slack messages; returns an unsubscribe fn.
-   *  Same pattern as onHiveHookEvent. */
-  onSlackMessage: (cb: (msg: { text: string }) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, msg: { text: string }) => cb(msg);
+   *  The message carries the thread coordinates needed to reply in-thread. */
+  onSlackMessage: (cb: (msg: { text: string; channel: string; ts: string; thread_ts: string }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, msg: { text: string; channel: string; ts: string; thread_ts: string }) => cb(msg);
     ipcRenderer.on('slack:incomingMessage', listener);
     return () => ipcRenderer.removeListener('slack:incomingMessage', listener);
   },
@@ -585,11 +595,43 @@ const api = {
   /** Stop the Slack webhook server + tunnel. */
   slackStop: (): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('slack:stop'),
+  /** Current connection state + last Request URL (so Settings can hydrate the
+   *  "Connected" badge and re-show the persisted tunnel URL on reopen). */
+  slackStatus: (): Promise<{ running: boolean; url?: string }> =>
+    ipcRenderer.invoke('slack:status'),
+  /** Post a reply into a Slack thread (the bot token stays in main). Used for the
+   *  renderer's immediate "queued" ack. */
+  slackReply: (m: { channel: string; thread_ts: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('slack:reply', m),
+  /** Absolute path to the bundled reply helper, for the office worker's
+   *  end-of-run "post your summary back to Slack" instruction. */
+  slackReplyScriptPath: (): Promise<string> =>
+    ipcRenderer.invoke('slack:replyScriptPath'),
   /** Persist Slack settings (and stop the server if disabled / secret cleared). */
   slackSetConfig: (patch: {
     signingSecret?: string; botToken?: string; channelId?: string; port?: number; enabled?: boolean;
   }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('slack:setConfig', patch)
+    ipcRenderer.invoke('slack:setConfig', patch),
+
+  // ─── Generic webhook + status API (POST → work, GET → status) ────────────────
+  /** Start the generic webhook server; returns the public endpoint URL callers
+   *  POST to (secret-gated) and GET a token's status from. */
+  webhookStart: (): Promise<{ ok: boolean; url?: string; error?: string }> =>
+    ipcRenderer.invoke('webhook:start'),
+  /** Stop the generic webhook server + tunnel. */
+  webhookStop: (): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('webhook:stop'),
+  /** Current state + last endpoint URL (so Settings can hydrate the badge/URL). */
+  webhookStatus: (): Promise<{ running: boolean; url?: string }> =>
+    ipcRenderer.invoke('webhook:status'),
+  /** Mint + persist a fresh secret and return it for the user to copy. */
+  webhookGenerateSecret: (): Promise<{ ok: boolean; secret?: string }> =>
+    ipcRenderer.invoke('webhook:generateSecret'),
+  /** Persist webhook settings (and stop the server if disabled / secret cleared). */
+  webhookSetConfig: (patch: {
+    secret?: string; port?: number; enabled?: boolean;
+  }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('webhook:setConfig', patch)
 };
 
 contextBridge.exposeInMainWorld('cth', api);

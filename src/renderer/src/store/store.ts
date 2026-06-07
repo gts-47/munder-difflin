@@ -96,6 +96,10 @@ export interface QueuedMessage {
   /** True while headless Haiku enrichment is in flight. Prevents double-dispatch;
    *  the message stays visible in the queue with an 'enriching…' indicator. */
   enriching?: boolean;
+  /** Slack-originated: route to the enrich queue regardless of the global toggle. */
+  enrich?: boolean;
+  /** Slack-originated: thread coordinates so the office can reply in-thread. */
+  slack?: { channel: string; thread_ts: string };
 }
 
 export type SidebarTab = 'terminal' | 'files' | 'messages' | 'traces';
@@ -174,8 +178,9 @@ interface State {
    *  composer) doesn't eat what the user was typing. */
   drafts: Record<string, string>;
   setDraft: (agentId: string, text: string) => void;
-  /** Park a message for an agent. Returns nothing; the flush loop delivers it. */
-  enqueueMessage: (agentId: string, text: string) => void;
+  /** Park a message for an agent. Returns nothing; the flush loop delivers it.
+   *  `meta` carries optional Slack routing context (enrich flag + reply thread). */
+  enqueueMessage: (agentId: string, text: string, meta?: { enrich?: boolean; slack?: { channel: string; thread_ts: string } }) => void;
   /** Drop a single queued message (user removed it, or it was just delivered). */
   removeQueuedMessage: (agentId: string, messageId: string) => void;
   /** Mark a queued message as enriching (in-flight Haiku call). Prevents the
@@ -475,11 +480,15 @@ export const useStore = create<State>((set) => ({
   drafts: {},
   setDraft: (agentId, text) =>
     set((s) => ({ drafts: { ...s.drafts, [agentId]: text } })),
-  enqueueMessage: (agentId, text) =>
+  enqueueMessage: (agentId, text, meta) =>
     set((s) => {
       const trimmed = text.trim();
       if (!trimmed) return s;
-      const msg: QueuedMessage = { id: newQueuedId(), text: trimmed, ts: Date.now() };
+      const msg: QueuedMessage = {
+        id: newQueuedId(), text: trimmed, ts: Date.now(),
+        ...(meta?.enrich ? { enrich: true } : {}),
+        ...(meta?.slack ? { slack: meta.slack } : {})
+      };
       const messageQueues = { ...s.messageQueues, [agentId]: [...(s.messageQueues[agentId] ?? []), msg] };
       persistQueues(messageQueues);
       return { messageQueues };

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useStore, type Agent, type StationKind, type ToolKind } from '@/store/store';
+import { useStore, type Agent, type QueuedMessage, type StationKind, type ToolKind } from '@/store/store';
 import {
   buildSpawnCommand,
   inferAgentProvider,
@@ -373,7 +373,7 @@ export function useHive(config: HarnessConfig | null): void {
     // Send the front of `srcId`'s queue into `target`'s pty (verbatim or wrapped),
     // gated on the target being idle + off cooldown. Keyed cooldown per target so
     // strict one-by-one delivery holds. Returns true if it dispatched.
-    const dispatch = (srcId: string, target: Agent | undefined, wrap?: (t: string) => string): boolean => {
+    const dispatch = (srcId: string, target: Agent | undefined, wrap?: (m: QueuedMessage) => string): boolean => {
       const { messageQueues, removeQueuedMessage } = useStore.getState();
       const next = messageQueues[srcId]?.[0];
       if (!next || !target?.ptyId || target.status !== 'idle') return false;
@@ -394,6 +394,39 @@ export function useHive(config: HarnessConfig | null): void {
       return true;
     };
 
+    // Promote a genuine Slack-origin work item to a stamped kanban card the first
+    // time it's dispatched to the office. The card carries slack:{channel,thread_ts}
+    // (origin thread) so the main-process done-observer can post its one summary
+    // reply in-thread once the card later reaches 'done'. ADDITIVE + idempotent +
+    // best-effort: a failure here never affects the dispatch that already happened,
+    // and only dispatched work items land here (slash commands/acks never do).
+    type SlackTaskCard = Parameters<typeof window.cth.hiveWriteTasks>[0][number];
+    const ensureSlackCard = async (m: QueuedMessage): Promise<void> => {
+      const slack = m.slack;
+      if (!slack) return;
+      try {
+        const raw = await window.cth.hiveTasks();
+        const existing: SlackTaskCard[] =
+          raw && typeof raw === 'object' && Array.isArray((raw as { tasks?: unknown }).tasks)
+            ? (raw as { tasks: SlackTaskCard[] }).tasks
+            : [];
+        const id = `slack-${slack.thread_ts}-${m.id}`;
+        if (existing.some((t) => t.id === id)) return; // already promoted — no dup
+        const title = m.text.length > 80 ? `${m.text.slice(0, 79)}…` : m.text;
+        const card: SlackTaskCard = {
+          id,
+          title,
+          description: m.text,
+          status: 'todo',
+          dependsOn: [],
+          priority: 1,
+          createdAt: new Date().toISOString(),
+          slack
+        };
+        await window.cth.hiveWriteTasks([...existing, card]);
+      } catch { /* best-effort: card promotion must never sink dispatch */ }
+    };
+
     const flush = () => {
       const { agents, messageQueues, enrichEnabled, markMessageEnriching, removeQueuedMessage, enqueueMessage } = useStore.getState();
       const byId = (id: string) => agents.find((a) => a.id === id);
@@ -407,29 +440,23 @@ export function useHive(config: HarnessConfig | null): void {
         dispatch(a.id, a);
       }
 
-      // Michael's queue: enrich OFF → straight to Michael; enrich ON → headless
-      // Haiku call (assistant:enrich IPC) that replaces the raw text with an
-      // enriched prompt. Slash commands (e.g. /compact) are NEVER enriched.
-      // An in-flight enrichment is flagged .enriching = true — skip it so flush
-      // can't double-dispatch while the async Haiku call is running.
+      // Michael's queue: slash commands go verbatim (no card). Slack-origin or
+      // enrich-enabled non-commands go through headless Haiku. Slack card is
+      // stamped BEFORE enrichment — enriched re-queue loses .slack/.enrich.
       if (messageQueues[GOD_ID]?.length) {
-        const next = messageQueues[GOD_ID][0];
-        if (!next.enriching) {
-          const isCmd = next.text.startsWith('/');
-          if (enrichEnabled && !isCmd) {
-            markMessageEnriching(GOD_ID, next.id);
+        const head = messageQueues[GOD_ID][0];
+        if (!head.enriching) {
+          const isCmd = head.text.startsWith('/');
+          if (isCmd) { dispatch(GOD_ID, byId(GOD_ID)); }
+          else if (head.enrich || enrichEnabled) {
+            if (head.slack) void ensureSlackCard(head);
+            markMessageEnriching(GOD_ID, head.id);
             const god = byId(GOD_ID);
-            window.cth.enrichMessage({ message: next.text, cwd: god?.cwd ?? '' })
-              .then((res) => {
-                removeQueuedMessage(GOD_ID, next.id);
-                enqueueMessage(GOD_ID, res.ok && res.prompt ? res.prompt : next.text);
-              })
-              .catch(() => {
-                removeQueuedMessage(GOD_ID, next.id);
-                enqueueMessage(GOD_ID, next.text);
-              });
+            window.cth.enrichMessage({ message: head.text, cwd: god?.cwd ?? '' })
+              .then((res) => { removeQueuedMessage(GOD_ID, head.id); enqueueMessage(GOD_ID, res.ok && res.prompt ? res.prompt : head.text); })
+              .catch(() => { removeQueuedMessage(GOD_ID, head.id); enqueueMessage(GOD_ID, head.text); });
           } else {
-            dispatch(GOD_ID, byId(GOD_ID));
+            if (dispatch(GOD_ID, byId(GOD_ID)) && head.slack) void ensureSlackCard(head);
           }
         }
       }
@@ -452,11 +479,27 @@ export function useHive(config: HarnessConfig | null): void {
   //    webhook server pushes each verified message here via IPC; enqueueing to
   //    GOD_ID lands it in Michael's queue exactly as if the user had typed it
   //    into the composer — effect #4 above then drains it to his PTY.
+  //
+  //    For Slack-originated messages, a `#enrich` tag (case-insensitive) routes
+  //    to the enrich queue regardless of the global toggle; the tag is stripped
+  //    before dispatch. We also immediately ack in the triggering thread, and
+  //    stash the thread coords so the office can post its summary back later.
   useEffect(() => {
     if (!config?.onboardingComplete) return;
     return window.cth.onSlackMessage((msg) => {
       if (!msg?.text?.trim()) return;
-      useStore.getState().enqueueMessage(GOD_ID, msg.text.trim());
+      const raw = msg.text.trim();
+      const enrich = /(^|\s)#enrich(\s|$)/i.test(raw);
+      const text = raw.replace(/(^|\s)#enrich(\s|$)/i, ' ').trim(); // strip the tag
+      if (!text) return;
+      const slack = { channel: msg.channel, thread_ts: msg.thread_ts };
+      useStore.getState().enqueueMessage(GOD_ID, text, { enrich, slack });
+      // Immediate "queued" acknowledgement in the originating Slack thread.
+      void window.cth.slackReply({
+        channel: msg.channel,
+        thread_ts: msg.thread_ts,
+        text: 'Your request is queued Munder Difflin office employees will start working shortly.'
+      });
     });
   }, [config?.onboardingComplete]);
 

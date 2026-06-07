@@ -14,8 +14,12 @@ export interface SettingsModalProps {
 type SlackConfig = HarnessConfig & {
   slackEnabled?: boolean;
   slackSigningSecret?: string;
+  slackBotToken?: string;
   slackChannelId?: string;
   slackPort?: number;
+  webhookEnabled?: boolean;
+  webhookSecret?: string;
+  webhookPort?: number;
 };
 
 /** Pixel-aesthetic text input, mirroring AddAgentModal's inputStyle. */
@@ -38,6 +42,55 @@ const slackLabelStyle: CSSProperties = {
   color: 'var(--cth-ink-700)',
   textTransform: 'uppercase'
 };
+
+/** The exact connect walkthrough shown behind the ⓘ icon. Steps 6 & 7 spell out
+ *  the both-lists requirement: subscribe to message.channels / message.groups in
+ *  BOTH "Subscribe to bot events" AND "Subscribe to events on behalf of users". */
+const SLACK_CONNECT_STEPS = `Connect Munder Difflin to Slack
+
+1. api.slack.com/apps → Create New App → From scratch. Name it
+   "Munder Difflin" and pick your workspace.
+2. Basic Information → Signing Secret → copy it into the
+   "Signing secret" field here.
+3. OAuth & Permissions → Bot Token Scopes: add
+     chat:write          (office replies in-thread)
+     channels:history    (read public-channel messages)
+     groups:history      (read private-channel messages)
+   Install to workspace, then copy the Bot User OAuth Token
+   (xoxb-…) into the "Bot token" field here.
+4. Press Start (below) to launch the webhook and get your
+   Request URL.
+5. Event Subscriptions → Enable Events → Request URL: paste the
+   Request URL from here and wait for Slack's green ✓ (Verified).
+6. Event Subscriptions → "Subscribe to bot events": add
+     message.channels
+     message.groups
+7. Event Subscriptions → "Subscribe to events on behalf of users"
+   (add the matching User Token Scope channels:history / groups:history
+   first if Slack asks): add
+     message.channels
+     message.groups
+8. Save Changes, reinstall if Slack prompts, then invite the bot
+   to your channel:  /invite @MunderDifflin`;
+
+/** The request/response contract shown behind the webhook ⓘ. `<endpoint>` is the
+ *  public URL printed once the server starts; the secret/token go in headers so
+ *  they stay out of URLs and access logs. */
+const WEBHOOK_API_DOC = `Generic webhook API
+
+Trigger work (POST <endpoint>):
+  header  x-md-webhook-secret: <your secret>
+  body    {"message": "do X for me", "title": "optional short title"}
+  → 200   {"ok": true, "token": "<capability token>", "taskId": "<card id>"}
+
+Check status (GET <endpoint>):
+  header  x-md-webhook-token: <token>     (or  ?token=<token>)
+  → 200   {"ok": true, "status": "todo|doing|blocked|done",
+           "title": "...", "result": "<summary or null>"}
+
+The secret authorizes new work; the returned token is a read-only handle to
+that one task's status (it reveals nothing else). Keep both private. The
+endpoint URL rotates every time you press Start.`;
 
 /** Clear every renderer-side persisted key so a relaunch starts truly empty. */
 function clearLocalState(): void {
@@ -113,11 +166,28 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
   const slackCfg = config as SlackConfig;
   const [slackEnabled, setSlackEnabled] = useState(slackCfg.slackEnabled ?? false);
   const [slackSecret, setSlackSecret] = useState(slackCfg.slackSigningSecret ?? '');
+  const [slackBotToken, setSlackBotToken] = useState(slackCfg.slackBotToken ?? '');
   const [slackChannel, setSlackChannel] = useState(slackCfg.slackChannelId ?? '');
   const [slackPort, setSlackPort] = useState(String(slackCfg.slackPort ?? 3847));
   const [tunnelUrl, setTunnelUrl] = useState('');
   const [slackBusy, setSlackBusy] = useState(false);
   const [slackNote, setSlackNote] = useState('');
+  // Whether the webhook server is currently live. Hydrated from main on open so
+  // reopening Settings shows the true connection state + the persisted Request URL.
+  const [running, setRunning] = useState(false);
+  // Whether the connect-steps help panel is expanded (the ⓘ icon by the header).
+  const [showSlackHelp, setShowSlackHelp] = useState(false);
+
+  // ─── Generic webhook + status API ───────────────────────────────────────────
+  const [webhookEnabled, setWebhookEnabled] = useState(slackCfg.webhookEnabled ?? false);
+  const [webhookSecret, setWebhookSecret] = useState(slackCfg.webhookSecret ?? '');
+  const [webhookPort, setWebhookPort] = useState(String(slackCfg.webhookPort ?? 3849));
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [webhookRunning, setWebhookRunning] = useState(false);
+  const [webhookBusy, setWebhookBusy] = useState(false);
+  const [webhookNote, setWebhookNote] = useState('');
+  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
+  const [showWebhookHelp, setShowWebhookHelp] = useState(false);
 
   // Re-seed every editable field from the on-disk config when the modal opens.
   // App's `config` prop is loaded once and never refreshed after a save, so
@@ -132,15 +202,32 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
       setVelocityCeiling(cc.circuitBreaker?.tokenVelocityPerMin != null ? String(cc.circuitBreaker.tokenVelocityPerMin) : '');
       setSlackEnabled(cc.slackEnabled ?? false);
       setSlackSecret(cc.slackSigningSecret ?? '');
+      setSlackBotToken(cc.slackBotToken ?? '');
       setSlackChannel(cc.slackChannelId ?? '');
       setSlackPort(String(cc.slackPort ?? 3847));
+      setWebhookEnabled(cc.webhookEnabled ?? false);
+      setWebhookSecret(cc.webhookSecret ?? '');
+      setWebhookPort(String(cc.webhookPort ?? 3849));
     }).catch(() => { /* keep prop-seeded values */ });
+    // Hydrate live connection state + the persisted Request URL (req B/C/D): the
+    // tunnel URL lives in main, so reopening Settings while connected re-shows it.
+    window.cth.slackStatus().then((s) => {
+      if (!alive) return;
+      setRunning(s.running);
+      if (s.url) setTunnelUrl(s.url);
+    }).catch(() => { /* status unavailable — assume not running */ });
+    window.cth.webhookStatus().then((s) => {
+      if (!alive) return;
+      setWebhookRunning(s.running);
+      if (s.url) setWebhookUrl(s.url);
+    }).catch(() => { /* status unavailable — assume not running */ });
     return () => { alive = false; };
   }, []);
 
   /** Persist the current Slack inputs. Returns the resolved config patch. */
   const slackPatch = (enabled: boolean) => ({
     signingSecret: slackSecret,
+    botToken: slackBotToken,
     channelId: slackChannel,
     port: Number(slackPort) || 3847,
     enabled
@@ -164,7 +251,9 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
       setSlackEnabled(true);
       const res = await window.cth.slackStart();
       if (res.ok) {
-        setTunnelUrl(res.url ?? '');
+        setRunning(true);
+        // Keep the last URL if this start returned none (tunnel hiccup) — don't blank it.
+        if (res.url) setTunnelUrl(res.url);
         setSlackNote(res.url ? 'listening' : (res.error ?? 'started, but tunnel unavailable'));
       } else {
         setSlackNote(res.error ?? 'failed to start');
@@ -176,10 +265,69 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
 
   const stopSlack = async () => {
     setSlackBusy(true); setSlackNote('');
-    try { await window.cth.slackStop(); setTunnelUrl(''); setSlackNote('stopped'); }
+    // Keep the last Request URL visible (greyed) after Stop — Slack reuses it until
+    // the next Start hands out a fresh one, so blanking it would be misleading.
+    try { await window.cth.slackStop(); setRunning(false); setSlackNote('stopped'); }
     catch (e) { setSlackNote(e instanceof Error ? e.message : String(e)); }
     finally { setSlackBusy(false); }
   };
+
+  // ─── Generic webhook handlers ───────────────────────────────────────────────
+  const webhookPatch = (enabled: boolean) => ({
+    secret: webhookSecret,
+    port: Number(webhookPort) || 3849,
+    enabled
+  });
+
+  const saveWebhook = async () => {
+    setWebhookBusy(true); setWebhookNote('');
+    try {
+      await window.cth.webhookSetConfig(webhookPatch(webhookEnabled));
+      setWebhookNote('saved');
+    } catch (e) {
+      setWebhookNote(e instanceof Error ? e.message : String(e));
+    } finally { setWebhookBusy(false); }
+  };
+
+  /** Mint a fresh secret in main (256-bit) and show it for copying. */
+  const generateWebhookSecret = async () => {
+    setWebhookBusy(true); setWebhookNote('');
+    try {
+      const res = await window.cth.webhookGenerateSecret();
+      if (res.ok && res.secret) { setWebhookSecret(res.secret); setShowWebhookSecret(true); setWebhookNote('new secret — copy it now'); }
+      else setWebhookNote('could not generate secret');
+    } catch (e) {
+      setWebhookNote(e instanceof Error ? e.message : String(e));
+    } finally { setWebhookBusy(false); }
+  };
+
+  const startWebhook = async () => {
+    setWebhookBusy(true); setWebhookNote('');
+    try {
+      await window.cth.webhookSetConfig(webhookPatch(true));
+      setWebhookEnabled(true);
+      const res = await window.cth.webhookStart();
+      if (res.ok) {
+        setWebhookRunning(true);
+        if (res.url) setWebhookUrl(res.url);
+        setWebhookNote(res.url ? 'listening' : (res.error ?? 'started, but tunnel unavailable'));
+      } else {
+        setWebhookNote(res.error ?? 'failed to start');
+      }
+    } catch (e) {
+      setWebhookNote(e instanceof Error ? e.message : String(e));
+    } finally { setWebhookBusy(false); }
+  };
+
+  const stopWebhook = async () => {
+    setWebhookBusy(true); setWebhookNote('');
+    try { await window.cth.webhookStop(); setWebhookRunning(false); setWebhookNote('stopped'); }
+    catch (e) { setWebhookNote(e instanceof Error ? e.message : String(e)); }
+    finally { setWebhookBusy(false); }
+  };
+
+  const copyWebhookUrl = () => { void window.cth.copyToClipboard(webhookUrl); };
+  const copyWebhookSecret = () => { void window.cth.copyToClipboard(webhookSecret); };
 
   const copyTunnel = () => { void window.cth.copyToClipboard(tunnelUrl); };
 
@@ -386,21 +534,57 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <span style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
                       Slack integration
+                      {/* ⓘ — toggles the step-by-step connect guide (req A). */}
+                      <button
+                        type="button"
+                        aria-label="Show Slack connect steps"
+                        aria-expanded={showSlackHelp}
+                        onClick={() => setShowSlackHelp((v) => !v)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 16, height: 16, padding: 0, cursor: 'pointer',
+                          border: 'none', borderRadius: '50%',
+                          background: showSlackHelp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)',
+                          color: showSlackHelp ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
+                          fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '16px'
+                        }}
+                      >ⓘ</button>
                     </span>
                     <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
                       Pipe a Slack channel's messages straight into Michael's queue.
                     </span>
                   </div>
-                  <PixelButton
-                    variant={slackEnabled ? 'primary' : 'secondary'}
-                    size="sm"
-                    onClick={() => setSlackEnabled((v) => !v)}
-                  >
-                    {slackEnabled ? 'on' : 'off'}
-                  </PixelButton>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {/* Connection status (req B/C): clear, always-visible. */}
+                    <span style={{
+                      fontSize: 12, lineHeight: '16px',
+                      color: running ? 'var(--cth-mint-700, #1f7a4d)' : 'var(--cth-ink-500)'
+                    }}>
+                      {running ? '● Connected' : '○ Not connected'}
+                    </span>
+                    <PixelButton
+                      variant={slackEnabled ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => setSlackEnabled((v) => !v)}
+                    >
+                      {slackEnabled ? 'on' : 'off'}
+                    </PixelButton>
+                  </div>
                 </div>
+
+                {/* Step-by-step connect guide (req A). Includes the both-lists
+                    bot-event subscription requirement (steps 6 & 7). */}
+                {showSlackHelp && (
+                  <pre style={{
+                    margin: 0, padding: 10, whiteSpace: 'pre-wrap',
+                    background: 'var(--cth-paper-100)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                    fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '16px',
+                    color: 'var(--cth-ink-700)'
+                  }}>{SLACK_CONNECT_STEPS}</pre>
+                )}
 
                 {slackEnabled && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -411,6 +595,19 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                         value={slackSecret}
                         onChange={(e) => setSlackSecret(e.target.value)}
                         placeholder="Slack app → Basic Information → Signing Secret"
+                        style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                      />
+                    </label>
+
+                    {/* Bot token (req: in-thread replies). Stays in main; never
+                        leaves the main process or appears in any agent prompt. */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={slackLabelStyle}>Bot token</span>
+                      <input
+                        type="password"
+                        value={slackBotToken}
+                        onChange={(e) => setSlackBotToken(e.target.value)}
+                        placeholder="Slack app → OAuth & Permissions → Bot User OAuth Token (xoxb-…)"
                         style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
                       />
                     </label>
@@ -438,10 +635,11 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                     </div>
 
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <PixelButton variant="primary" size="sm" onClick={startSlack} disabled={slackBusy || !slackSecret.trim()}>
-                        {slackBusy ? '…' : 'start'}
+                      {/* Start disabled once connected (req B); Stop only when running. */}
+                      <PixelButton variant="primary" size="sm" onClick={startSlack} disabled={slackBusy || !slackSecret.trim() || running}>
+                        {slackBusy ? '…' : running ? 'connected' : 'start'}
                       </PixelButton>
-                      <PixelButton variant="secondary" size="sm" onClick={stopSlack} disabled={slackBusy}>
+                      <PixelButton variant="secondary" size="sm" onClick={stopSlack} disabled={slackBusy || !running}>
                         stop
                       </PixelButton>
                       <PixelButton variant="ghost" size="sm" onClick={saveSlack} disabled={slackBusy}>
@@ -452,9 +650,16 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                       )}
                     </div>
 
-                    {tunnelUrl && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span style={slackLabelStyle}>Request URL — paste into Slack Event Subscriptions</span>
+                    {/* Keep the Request URL visible while connected even after a
+                        modal reopen (req D); when stopped, show the last URL greyed
+                        since Slack reuses it until the next Start. */}
+                    {(running || tunnelUrl) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, opacity: running ? 1 : 0.55 }}>
+                        <span style={slackLabelStyle}>
+                          {running
+                            ? 'Request URL — paste into Slack Event Subscriptions'
+                            : 'last Request URL — Slack reuses it until you Stop'}
+                        </span>
                         <div style={{ display: 'flex', gap: 6 }}>
                           <input
                             readOnly
@@ -462,7 +667,7 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                             onFocus={(e) => e.currentTarget.select()}
                             style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 12 }}
                           />
-                          <PixelButton variant="secondary" size="sm" onClick={copyTunnel}>copy</PixelButton>
+                          <PixelButton variant="secondary" size="sm" onClick={copyTunnel} disabled={!tunnelUrl}>copy</PixelButton>
                         </div>
                       </div>
                     )}
@@ -473,6 +678,131 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                       Request URL above → reinstall to your workspace. The tunnel URL changes on every
                       restart, so re-paste it after pressing Start again.
                     </span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
+
+              {/* Generic webhook + status API */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                      Webhook API
+                      <button
+                        type="button"
+                        aria-label="Show webhook API format"
+                        aria-expanded={showWebhookHelp}
+                        onClick={() => setShowWebhookHelp((v) => !v)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 16, height: 16, padding: 0, cursor: 'pointer',
+                          border: 'none', borderRadius: '50%',
+                          background: showWebhookHelp ? 'var(--cth-ink-700)' : 'var(--cth-ink-300)',
+                          color: showWebhookHelp ? 'var(--cth-paper-100)' : 'var(--cth-ink-900)',
+                          fontFamily: 'var(--cth-font-display)', fontSize: 10, lineHeight: '16px'
+                        }}
+                      >ⓘ</button>
+                    </span>
+                    <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                      A secret-gated HTTP endpoint: POST to start work and get a token, GET the token for status.
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      fontSize: 12, lineHeight: '16px',
+                      color: webhookRunning ? 'var(--cth-mint-700, #1f7a4d)' : 'var(--cth-ink-500)'
+                    }}>
+                      {webhookRunning ? '● Connected' : '○ Not connected'}
+                    </span>
+                    <PixelButton
+                      variant={webhookEnabled ? 'primary' : 'secondary'}
+                      size="sm"
+                      onClick={() => setWebhookEnabled((v) => !v)}
+                    >
+                      {webhookEnabled ? 'on' : 'off'}
+                    </PixelButton>
+                  </div>
+                </div>
+
+                {showWebhookHelp && (
+                  <pre style={{
+                    margin: 0, padding: 10, whiteSpace: 'pre-wrap',
+                    background: 'var(--cth-paper-100)',
+                    boxShadow: 'inset 0 0 0 1px var(--cth-ink-300)',
+                    fontFamily: 'var(--cth-font-mono)', fontSize: 11, lineHeight: '16px',
+                    color: 'var(--cth-ink-700)'
+                  }}>{WEBHOOK_API_DOC}</pre>
+                )}
+
+                {webhookEnabled && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Public surface (tunnel-forwarded). Loud, not buried. */}
+                    <span style={{ fontSize: 12, lineHeight: '16px', color: '#6E1423' }}>
+                      ⚠ This opens a PUBLIC endpoint anyone with the secret can post to. It stays off until you press Start.
+                    </span>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span style={slackLabelStyle}>Secret key</span>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <input
+                          type={showWebhookSecret ? 'text' : 'password'}
+                          value={webhookSecret}
+                          onChange={(e) => setWebhookSecret(e.target.value)}
+                          placeholder="press Generate, or paste your own"
+                          style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                        />
+                        <PixelButton variant="secondary" size="sm" onClick={() => setShowWebhookSecret((v) => !v)} disabled={!webhookSecret}>
+                          {showWebhookSecret ? 'hide' : 'show'}
+                        </PixelButton>
+                        <PixelButton variant="secondary" size="sm" onClick={copyWebhookSecret} disabled={!webhookSecret}>copy</PixelButton>
+                        <PixelButton variant="ghost" size="sm" onClick={generateWebhookSecret} disabled={webhookBusy}>generate</PixelButton>
+                      </div>
+                    </label>
+
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 92 }}>
+                      <span style={slackLabelStyle}>Port</span>
+                      <input
+                        type="number"
+                        value={webhookPort}
+                        onChange={(e) => setWebhookPort(e.target.value)}
+                        placeholder="3849"
+                        style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                      />
+                    </label>
+
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <PixelButton variant="primary" size="sm" onClick={startWebhook} disabled={webhookBusy || !webhookSecret.trim() || webhookRunning}>
+                        {webhookBusy ? '…' : webhookRunning ? 'connected' : 'start'}
+                      </PixelButton>
+                      <PixelButton variant="secondary" size="sm" onClick={stopWebhook} disabled={webhookBusy || !webhookRunning}>
+                        stop
+                      </PixelButton>
+                      <PixelButton variant="ghost" size="sm" onClick={saveWebhook} disabled={webhookBusy}>
+                        save
+                      </PixelButton>
+                      {webhookNote && (
+                        <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{webhookNote}</span>
+                      )}
+                    </div>
+
+                    {(webhookRunning || webhookUrl) && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, opacity: webhookRunning ? 1 : 0.55 }}>
+                        <span style={slackLabelStyle}>
+                          {webhookRunning ? 'Endpoint URL — POST work / GET status here' : 'last endpoint URL — rotates on next Start'}
+                        </span>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <input
+                            readOnly
+                            value={webhookUrl}
+                            onFocus={(e) => e.currentTarget.select()}
+                            style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 12 }}
+                          />
+                          <PixelButton variant="secondary" size="sm" onClick={copyWebhookUrl} disabled={!webhookUrl}>copy</PixelButton>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
