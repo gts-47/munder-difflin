@@ -8,7 +8,7 @@ import { MessageQueueComposer } from './MessageQueueComposer';
 import { TasksKanban } from './TasksKanban';
 import { AskMeTab } from './AskMeTab';
 import { SchedulesTab } from './SchedulesTab';
-import { disposeTerminal } from './terminalPool';
+import { acquireTerminal, resetTerminal } from './terminalPool';
 import { Icon } from './Icon';
 import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
@@ -235,7 +235,12 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     try {
       const cfg = await window.cth.getConfig();
       await window.cth.killPty(a.ptyId);
-      disposeTerminal(a.ptyId);
+      // Soft-reset the pooled terminal in place rather than disposing it: the
+      // same ptyId is reused, so its data subscription, opened xterm and keyboard
+      // wiring all survive the restart. (Disposing dropped the live terminal while
+      // the view — keyed on the unchanged ptyId — never re-attached a replacement,
+      // leaving a dead pane that swallowed every keystroke.)
+      resetTerminal(a.ptyId);
       // Respawn on the same CLI this agent already runs on (inferred from its
       // command if not explicitly tagged) so an Antigravity/Codex worker stays
       // on its own binary. tokenizeCommand keeps quoted model labels one arg.
@@ -247,7 +252,13 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
         : a.isAssistant
         ? { id: a.id, name: a.name, cwd: a.cwd, provider, isAssistant: true, role: "Michael's prep assistant" }
         : { id: a.id, name: a.name, cwd: a.cwd, provider, role: a.description };
-      const res = await window.cth.spawnPty({ id: a.ptyId, cwd: a.cwd, command: exe, args, provider, cols: 100, rows: 30, hive });
+      // Spawn the replacement at the terminal's REAL grid, not the fixed 100×30
+      // default. A size mismatch makes the Claude TUI's absolute cursor moves land
+      // in the wrong cells, so the screen renders as scattered/overlapping text.
+      const entry = acquireTerminal(a.ptyId);
+      let cols = 100, rows = 30;
+      try { entry.fit.fit(); cols = entry.term.cols; rows = entry.term.rows; } catch { /* host not sized yet */ }
+      const res = await window.cth.spawnPty({ id: a.ptyId, cwd: a.cwd, command: exe, args, provider, cols, rows, hive });
       if (res.ok) updateAgent(a.id, { command: command.trim(), provider, model, status: 'idle', action: 'restarting…' });
     } catch { /* noop */ } finally {
       setRestarting(null);
