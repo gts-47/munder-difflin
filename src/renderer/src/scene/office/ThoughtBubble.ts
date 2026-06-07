@@ -59,6 +59,11 @@ export class ThoughtBubble {
   // never renders below its designed 1:1 screen size; at zoom ≥ 1 it keeps
   // scaling with the world as before.
   private zoom = 1;
+  // World bounds (map size in px). An avatar near the map edge — Michael's CEO
+  // room sits in the top-left corner — would otherwise push its cloud out of
+  // the visible world. setPosition clamps the rect back inside, tooltip-style.
+  private boundsW = 0;
+  private boundsH = 0;
 
   constructor() {
     this.container = new Container();
@@ -147,12 +152,27 @@ export class ThoughtBubble {
     return 1 / Math.min(this.zoom, 1);
   }
 
+  /** The world rect the bubble must stay inside (the map size, in px). */
+  setBounds(w: number, h: number): void {
+    this.boundsW = w;
+    this.boundsH = h;
+  }
+
   setPosition(px: number, py: number): void {
     const comp = this.compensation();
     const w = this.bgW * RENDER_SCALE * comp;
     const h = this.bgH * RENDER_SCALE * comp;
-    this.container.x = Math.round(px - w / 2);
-    this.container.y = Math.round(py + OFFSET_Y - h - this.extraLift);
+    let x = px - w / 2;
+    let y = py + OFFSET_Y - h - this.extraLift;
+    if (this.boundsW > 0) {
+      // Clamp into the world, tooltip-style: slide horizontally, and a cloud
+      // that would poke above the top edge slides down instead (it may then
+      // cover the avatar's hat — better than being unreadable off-world).
+      x = Math.min(Math.max(x, 1), Math.max(1, this.boundsW - w - 1));
+      y = Math.min(Math.max(y, 1), Math.max(1, this.boundsH - h - 1));
+    }
+    this.container.x = Math.round(x);
+    this.container.y = Math.round(y);
   }
 
   /** Extra upward shift (px), set by the scene's bubble-overlap pass. */
@@ -167,7 +187,15 @@ export class ThoughtBubble {
     const comp = this.compensation();
     const w = this.bgW * RENDER_SCALE * comp;
     const h = this.bgH * RENDER_SCALE * comp;
-    return { x: px - w / 2, y: py + OFFSET_Y - h, w, h };
+    let x = px - w / 2;
+    let y = py + OFFSET_Y - h;
+    if (this.boundsW > 0) {
+      // Report the CLAMPED base rect so the overlap resolver stacks bubbles
+      // where they actually render, not where they ideally would.
+      x = Math.min(Math.max(x, 1), Math.max(1, this.boundsW - w - 1));
+      y = Math.min(Math.max(y, 1), Math.max(1, this.boundsH - h - 1));
+    }
+    return { x, y, w, h };
   }
 
   hide(): void {
