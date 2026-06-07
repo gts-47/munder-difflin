@@ -27,7 +27,7 @@ import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AgentUsageSample } from './usage';
 import { COMMAND_GROUPS } from '../shared/claudeCommands';
-import { isHiveAwareProvider, providerPreset, type AgentProvider } from '../shared/agentProvider';
+import { isHiveAwareProvider, canReceiveInbox, providerPreset, type AgentProvider } from '../shared/agentProvider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -560,15 +560,15 @@ export class HiveManager {
     const resolveTo = (to: string): string => (to === 'human' || to === 'god' ? godId : to);
     const targets = msg.to === 'broadcast'
       // The roster for fan-out is the ACTIVE registry: skip the send-only prep
-      // assistant, any archived agent (closed tab), and non-hive-aware providers
-      // (e.g. Antigravity's agy — they never drain an inbox) so mail never piles
-      // into a dead inbox no one will read. A broadcast just skips them; their
-      // god relays anything they actually need (direct mail to them bounces).
+      // assistant, any archived agent (closed tab), and providers that can't
+      // drain an inbox (hookless custom commands) so mail never piles into a dead
+      // inbox no one reads. Claude AND Antigravity workers ARE included — agy
+      // drains its inbox via the agy-hook Stop→drain bridge.
       ? Object.keys(reg.agents).filter((a) =>
           a !== msg.from
           && !reg.agents[a]?.isAssistant
           && !reg.agents[a]?.archived
-          && isHiveAwareProvider(reg.agents[a]?.provider))
+          && canReceiveInbox(reg.agents[a]?.provider))
       // Never deliver to self — guards a god → "human" message looping back to god.
       : [resolveTo(msg.to)].filter((t) => t !== msg.from);
     for (const t of targets) {
@@ -587,16 +587,15 @@ export class HiveManager {
         }, godId);
         continue;
       }
-      // Non-Claude workers (e.g. Antigravity's `agy`) don't run the hive's Stop
-      // hook, so they never drain their inbox — direct mail would rot unread.
-      // Bounce it to the god (the same way assistant mail bounces) so the
-      // orchestrator relays it as a live prompt instead. God himself is exempt
-      // (he may legitimately run on any provider and is the bounce target).
-      if (t !== godId && !isHiveAwareProvider(reg.agents[t]?.provider)) {
+      // A provider with no way to drain its inbox (a hookless custom command)
+      // would let direct mail rot unread — bounce it to the god to relay as a
+      // live prompt. Claude + Antigravity drain their inbox (Stop hook / agy-hook
+      // bridge), so they receive directly. God is exempt (the bounce target).
+      if (t !== godId && !canReceiveInbox(reg.agents[t]?.provider)) {
         this.deliver({
           ...msg,
           to: godId,
-          subject: `[bounced — "${t}" runs ${reg.agents[t]?.provider ?? 'a non-Claude CLI'} and can't read its hive inbox; relay this to it] ${msg.subject}`
+          subject: `[bounced — "${t}" runs ${reg.agents[t]?.provider ?? 'a hookless CLI'} and can't drain its hive inbox; relay this to it] ${msg.subject}`
         }, godId);
         continue;
       }

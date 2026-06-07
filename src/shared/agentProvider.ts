@@ -25,8 +25,15 @@ export interface AgentProviderPreset {
   autoFlag?: string;
   /** Claude Code accepts the hive identity injection (`--append-system-prompt`
    *  + hook `--settings`). Other CLIs don't — they spawn with the shared AGENT_*
-   *  env only, and direct hive mail to them bounces to the god. */
+   *  env only. Gates the Claude-specific spawn injection in hive.ensureAgent. */
   hiveAware: boolean;
+  /** Whether the router may DELIVER inbox mail to this provider (vs bouncing it
+   *  to the god). Requires a way for the agent to actually drain its inbox: Claude
+   *  via its Stop hook, Antigravity via the agy-hook bridge's Stop→drain. A
+   *  provider with no hook surface (custom) can't, so its mail still bounces.
+   *  Distinct from hiveAware: agy is NOT hiveAware (no Claude injection) but CAN
+   *  receive inbox (it has the bridged Stop-drain hook). */
+  canReceiveInbox: boolean;
   /** For non-hive-aware CLIs that still take an INITIAL prompt to orient the
    *  session (Antigravity's `agy -i "<prompt>"`), the flag to pass it under. The
    *  hive identity+protocol rides in as the first turn — the closest thing to
@@ -42,7 +49,8 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     supportsModel: true,
     modelFlag: '--model',
     autoFlag: '--permission-mode bypassPermissions',
-    hiveAware: true
+    hiveAware: true,
+    canReceiveInbox: true
   },
   {
     id: 'antigravity',
@@ -52,6 +60,7 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     modelFlag: '--model',
     autoFlag: '--dangerously-skip-permissions',
     hiveAware: false,
+    canReceiveInbox: true, // via the agy-hook bridge (Stop→drain); verified agy honors hook decisions
     initialPromptFlag: '-i' // agy --prompt-interactive: orient the session, then continue
   },
   {
@@ -59,7 +68,8 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     label: 'Custom',
     defaultCommand: '',
     supportsModel: false,
-    hiveAware: false
+    hiveAware: false,
+    canReceiveInbox: false // no hook surface to drain an inbox → mail bounces to the god
   }
 ];
 
@@ -82,6 +92,14 @@ export function isClaudeProvider(provider: AgentProvider | undefined): boolean {
 /** Whether this provider takes the hive's Claude-only identity injection. */
 export function isHiveAwareProvider(provider: AgentProvider | undefined): boolean {
   return providerPreset(provider ?? 'claude').hiveAware;
+}
+
+/** Whether the router may deliver inbox mail to this provider (else bounce to
+ *  the god). True for any provider that can actually drain its inbox — Claude
+ *  and Antigravity (via the agy-hook Stop→drain bridge); false for hookless
+ *  custom commands. */
+export function canReceiveInbox(provider: AgentProvider | undefined): boolean {
+  return providerPreset(provider ?? 'claude').canReceiveInbox;
 }
 
 /** The bare executable from a command string ('agy --model x' → 'agy'). */
