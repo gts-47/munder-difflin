@@ -108,7 +108,7 @@ export class ClosingTimeController {
         '   Tell each worker to immediately: park or commit any work-in-progress safely, append its current state + concrete next steps to its memory.md, and then reply to you with a message whose subject is exactly "CLOSING-TIME-ACK".',
         '2. WAIT and keep draining your inbox until EVERY worker above has sent its CLOSING-TIME-ACK. Nudge stragglers once if needed.',
         '3. Save your own state: update board.md and append your shift summary to your memory.md.',
-        `4. CONCLUDE by sending a message with "to":"human" and the subject exactly "CLOSING-TIME-COMPLETE" — the harness watches for it and closes the app. Do not send it before every worker has acked.`,
+        `4. CONCLUDE by sending a message with "to":"human" and the subject exactly "CLOSING-TIME-COMPLETE" — the harness watches for it and closes the app. Do not send it before every worker has acked: the harness independently verifies the ACKs and will reject a premature conclusion.`,
         '',
         this.workers.size === 0
           ? 'There are no workers on the floor right now — do steps 3 and 4 immediately.'
@@ -152,6 +152,30 @@ export class ClosingTimeController {
     // The god concluding. COMPLETE is only honored from the god itself — a
     // worker can't (accidentally or otherwise) shut down the whole floor.
     if (COMPLETE_RE.test(msg.subject) && msg.from === this.godId) {
+      // Trust but VERIFY: the god is told to wait for every ACK, but the
+      // whole point of closing time is that no worker loses unsaved state —
+      // so a premature COMPLETE must not close the floor. Workers whose
+      // terminal was closed mid-protocol (archived) are excused: their ACK
+      // can never arrive and their session is gone either way.
+      const reg = this.hive.registry();
+      const pending = [...this.workers].filter(
+        (id) => !this.acked.has(id) && !reg.agents[id]?.archived
+      );
+      if (pending.length > 0) {
+        const names = pending.map((id) => `${reg.agents[id]?.name ?? id} (${id})`).join(', ');
+        this.hive.send({
+          to: 'god',
+          act: 'refuse',
+          subject: 'CLOSING TIME — conclusion rejected, workers still missing',
+          body: [
+            `The harness is still missing a CLOSING-TIME-ACK from: ${names}.`,
+            'The app stays open until every worker has confirmed its memory is saved.',
+            'Chase the stragglers (re-send the closing-time instruction to each), wait for their ACKs, then send CLOSING-TIME-COMPLETE again.'
+          ].join('\n')
+        }, 'human');
+        this.emitState('progress');
+        return;
+      }
       this.cleanup();
       this.active = true; // stays "active" through the grace so the UI holds
       this.emitState('complete');
