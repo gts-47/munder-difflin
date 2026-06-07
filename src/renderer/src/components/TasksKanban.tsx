@@ -66,8 +66,11 @@ function stableId(seed: string): string {
   return `t-${(h >>> 0).toString(36)}`;
 }
 
-/** Normalize whatever hive:tasks returns into a typed task array. */
-function parseTasks(raw: unknown): HiveTask[] {
+/** Normalize whatever hive:tasks returns into a typed task array. The god
+ *  writes this file by hand — every field except the shape itself is optional
+ *  in practice, so EVERY consumer must go through this (exported for the
+ *  detail overlay; a raw card without dependsOn once crashed it). */
+export function parseTasks(raw: unknown): HiveTask[] {
   const list = (raw && typeof raw === 'object' && Array.isArray((raw as { tasks?: unknown }).tasks))
     ? (raw as { tasks: unknown[] }).tasks
     : [];
@@ -258,7 +261,9 @@ export function TaskDetail({ task, all, assigneeName, onMove, onAssign, onClose 
   onClose: () => void;
 }) {
   const col = COLUMNS.find((c) => c.key === task.status) ?? COLUMNS[0];
-  const deps = task.dependsOn
+  // Belt + suspenders: parseTasks normalizes these, but the ledger is a
+  // hand-written file — never trust a card's shape at the point of use.
+  const deps = (task.dependsOn ?? [])
     .map((id) => all.find((t) => t.id === id))
     .filter((t): t is HiveTask => !!t);
   const created = new Date(task.createdAt);

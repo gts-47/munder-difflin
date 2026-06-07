@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@/store/store';
-import { TaskDetail, type HiveTask } from './TasksKanban';
+import { TaskDetail, parseTasks, type HiveTask } from './TasksKanban';
 
 /**
  * App-wide host for the task detail: whoever calls store.openTaskDetail(id) —
@@ -11,13 +11,6 @@ import { TaskDetail, type HiveTask } from './TasksKanban';
 
 const POLL_MS = 5000;
 
-function parse(raw: unknown): HiveTask[] {
-  const list = (raw && typeof raw === 'object' && Array.isArray((raw as { tasks?: unknown }).tasks))
-    ? (raw as { tasks: HiveTask[] }).tasks
-    : [];
-  return list.filter((t) => !!t && typeof t === 'object' && typeof (t as { id?: unknown }).id === 'string');
-}
-
 export function TaskDetailOverlay() {
   const taskDetailId = useStore((s) => s.taskDetailId);
   const closeTaskDetail = useStore((s) => s.closeTaskDetail);
@@ -27,7 +20,10 @@ export function TaskDetailOverlay() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {
-    try { setTasks(parse(await window.cth.hiveTasks())); } catch { /* keep last good */ }
+    // parseTasks NORMALIZES (the ledger is a hand-written file; cards may lack
+    // dependsOn/priority/etc.) — a raw card without dependsOn crashed the
+    // detail once. Never feed TaskDetail unparsed ledger entries.
+    try { setTasks(parseTasks(await window.cth.hiveTasks())); } catch { /* keep last good */ }
   }, []);
 
   useEffect(() => {
