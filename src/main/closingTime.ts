@@ -59,6 +59,11 @@ export class ClosingTimeController {
 
   constructor(
     private hive: HiveManager,
+    /** Agent ids that have a LIVE PTY right now. The hive registry alone is
+     *  not enough: agents that died with the app (hard quit, crash) keep
+     *  their registry record without ever being flagged `archived`, so a
+     *  registry-based roster waits on ghosts that can never ACK. */
+    private getLiveAgentIds: () => string[],
     private getWebContents: () => WebContents | null,
     /** Called once the god concluded — runs the real teardown + app.quit(). */
     private onConcluded: () => void
@@ -79,15 +84,17 @@ export class ClosingTimeController {
     }
     const reg = this.hive.registry();
     this.godId = reg.godId ?? 'god';
-    const god = reg.agents[this.godId];
-    if (!god || god.archived) {
+    const live = new Set(this.getLiveAgentIds());
+    if (!reg.agents[this.godId] || !live.has(this.godId)) {
       return { ok: false, error: 'No orchestrator is running — closing time needs the god agent to collect the reports.' };
     }
 
+    // Only agents with a live terminal are waited on — the registry is just
+    // metadata here (names + god/assistant flags), never the roster source.
     this.workers = new Set(
-      Object.keys(reg.agents).filter((id) => {
+      [...live].filter((id) => {
         const a = reg.agents[id];
-        return !a.archived && !a.isGod && !a.isAssistant && id !== this.godId;
+        return id !== this.godId && !!a && !a.isGod && !a.isAssistant;
       })
     );
     this.acked = new Set();
@@ -155,11 +162,12 @@ export class ClosingTimeController {
       // Trust but VERIFY: the god is told to wait for every ACK, but the
       // whole point of closing time is that no worker loses unsaved state —
       // so a premature COMPLETE must not close the floor. Workers whose
-      // terminal was closed mid-protocol (archived) are excused: their ACK
-      // can never arrive and their session is gone either way.
+      // terminal died mid-protocol (tab closed, crash) are excused: their
+      // ACK can never arrive and their session is gone either way.
       const reg = this.hive.registry();
+      const liveNow = new Set(this.getLiveAgentIds());
       const pending = [...this.workers].filter(
-        (id) => !this.acked.has(id) && !reg.agents[id]?.archived
+        (id) => !this.acked.has(id) && liveNow.has(id) && !reg.agents[id]?.archived
       );
       if (pending.length > 0) {
         const names = pending.map((id) => `${reg.agents[id]?.name ?? id} (${id})`).join(', ');

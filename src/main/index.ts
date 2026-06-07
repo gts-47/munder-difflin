@@ -1003,6 +1003,10 @@ ipcMain.handle('app:cancelClose', () => {
 // only then does the harness tear down. See closingTime.ts for the protocol.
 const closingTime = new ClosingTimeController(
   hive,
+  // Roster source: agents with a live PTY right now (ptyToAgent is pruned on
+  // every teardown). The registry alone would include ghost workers from
+  // sessions that ended with a hard quit — never archived, never able to ACK.
+  () => [...new Set(ptyToAgent.values())],
   () => liveWebContents(),
   () => teardownAndQuit()
 );
