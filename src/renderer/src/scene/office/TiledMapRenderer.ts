@@ -101,6 +101,34 @@ export class TiledMapRenderer {
   getZone(name: string): ZoneRect | undefined { return this.zones.get(name); }
   getAllZones(): Map<string, ZoneRect> { return this.zones; }
 
+  /** The (flip-stripped) gid painted at a tile of a layer, 0 when empty.
+   *  Lets the scene locate furniture by art — e.g. each desk's monitor block. */
+  gidAt(layerName: string, tx: number, ty: number): number {
+    const layer = this.findLayer(layerName, 'tilelayer');
+    if (!layer?.data || tx < 0 || ty < 0 || tx >= this.width || ty >= this.height) return 0;
+    return (layer.data[ty * this.width + tx] ?? 0) & TILE_ID_MASK;
+  }
+
+  /** A sub-texture for one tileset tile, addressed by gid — for dynamic props
+   *  that reuse map art (e.g. the lit monitor variant overlaid when an agent
+   *  sits down). Returns undefined for gid 0 / out-of-range.
+   *  NOTE: allocates a fresh Texture per call and the CALLER owns its lifetime
+   *  (fine for constructor-time use, kept alive by sprites; do NOT call this
+   *  per frame or the textures leak). */
+  textureForGid(gid: number): Texture | undefined {
+    const tileId = gid & TILE_ID_MASK;
+    if (tileId === 0) return undefined;
+    const resolved = this.resolveTileset(tileId);
+    if (!resolved) return undefined;
+    const { tileset, texture } = resolved;
+    const cols = tileset.columns ?? 16;
+    const tw = tileset.tilewidth ?? this.tileSize;
+    const th = tileset.tileheight ?? this.tileSize;
+    const localId = tileId - tileset.firstgid;
+    const frame = new Rectangle((localId % cols) * tw, Math.floor(localId / cols) * th, tw, th);
+    return new Texture({ source: texture.source, frame });
+  }
+
   private parseCollisionLayer(): void {
     const layer = this.findLayer(COLLISION_LAYER, 'tilelayer');
     this.walkabilityGrid = Array.from({ length: this.height }, () => Array(this.width).fill(true));
