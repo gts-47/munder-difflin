@@ -97,6 +97,22 @@ export class Character {
   private glyphElapsed = 0;
   private onClick?: (agentId: string) => void;
 
+  // ── Office-life effects (cheer / coffee / watering) ────────────────────────
+  /** Effect layer riding on the sprite: confetti, the carried cup, droplets. */
+  private fx: Graphics;
+  private fxDirty = false;            // fx drew last frame → needs a clear when idle
+  private cheerT = -1;                // -1 = not cheering
+  private confetti: Array<{ x: number; y: number; vx: number; vy: number; c: number }> = [];
+  private carryingCup = false;
+  /** The cup parked on this agent's desk (world-positioned, lives in the char
+   *  layer so it survives the agent walking away). */
+  private deskCup: Graphics;
+  private deskCupOn = false;
+  private cupSpot: { x: number; y: number } | null = null;
+  private waterT = -1;                // -1 = not watering
+  private waterDur = 0;
+  private onWaterDone: (() => void) | null = null;
+
   constructor(options: CharacterOptions) {
     this.agentId = options.agentId;
     this.mapRenderer = options.mapRenderer;
@@ -122,6 +138,13 @@ export class Character {
 
     this.overlay = new Graphics();
     this.overlay.eventMode = 'none';
+
+    this.fx = new Graphics();
+    this.fx.eventMode = 'none';
+
+    this.deskCup = new Graphics();
+    this.deskCup.eventMode = 'none';
+    this.deskCup.visible = false;
   }
 
   getAnimation(): CharacterAnimation { return this.state; }
@@ -332,6 +355,92 @@ export class Character {
     if (glyph === 'none') this.overlay.clear();
   }
 
+  // ── Cheer ──────────────────────────────────────────────────────────────────
+
+  /** Celebrate finished work: a couple of happy hops under a confetti burst.
+   *  Movement (wander / idle loop) is held for the duration so the jump reads
+   *  on the spot; whatever the avatar was told to do resumes right after. */
+  cheer(): void {
+    if (this.sitting) return; // seated cheer would fight the sit offset/crop
+    // Stop in place so the hops read on the spot; roaming resumes right after.
+    this.path = [];
+    if (this.state === 'walk') {
+      this.state = 'idle';
+      this.sprite.setAnimation('idle', this.direction);
+    }
+    this.cheerT = 0;
+    this.confetti = [];
+    const colors = [0xffd93d, 0xff6b6b, 0x6bcb77, 0x4d96ff, 0xf6a6ff];
+    for (let i = 0; i < 14; i++) {
+      this.confetti.push({
+        x: (Math.random() - 0.5) * 8,
+        y: -22 - Math.random() * 6,
+        vx: (Math.random() - 0.5) * 46,
+        vy: -30 - Math.random() * 40,
+        c: colors[i % colors.length]
+      });
+    }
+  }
+
+  /** True while the cheer animation holds the avatar in place. */
+  isCheering(): boolean {
+    return this.cheerT >= 0;
+  }
+
+  // ── Coffee cup ─────────────────────────────────────────────────────────────
+
+  /** Where this agent's cup rests when parked on its desk (world pixels).
+   *  Typically beside the monitor — where the old baked-in tileset mug sat. */
+  setCupSpot(spot: { x: number; y: number } | null): void {
+    this.cupSpot = spot;
+    if (spot) {
+      this.deskCup.position.set(spot.x, spot.y);
+      this.deskCup.zIndex = spot.y;
+    }
+  }
+
+  /** Show/hide the cup in the avatar's hand (walking it to/from the café). */
+  setCarryingCup(carrying: boolean): void {
+    this.carryingCup = carrying;
+  }
+
+  /** Park the carried cup on the desk / pick it back up. No-op without a spot. */
+  setCupOnDesk(on: boolean): void {
+    if (!this.cupSpot) return;
+    this.deskCupOn = on;
+    this.deskCup.visible = on;
+    if (on) this.drawCup(this.deskCup, 0, 0);
+    else this.deskCup.clear();
+  }
+
+  hasCupOnDesk(): boolean {
+    return this.deskCupOn;
+  }
+
+  isCarryingCup(): boolean {
+    return this.carryingCup;
+  }
+
+  // ── Watering ───────────────────────────────────────────────────────────────
+
+  /** Water the plant the avatar is facing: a held watering can + a steady arc
+   *  of droplets for `seconds`, then `onDone` (resume wandering etc.). */
+  startWatering(seconds: number, onDone?: () => void): void {
+    this.waterT = 0;
+    this.waterDur = seconds;
+    this.onWaterDone = onDone ?? null;
+  }
+
+  isWatering(): boolean {
+    return this.waterT >= 0;
+  }
+
+  /** Abort a watering in progress (real work arrived). The callback is dropped. */
+  stopWatering(): void {
+    this.waterT = -1;
+    this.onWaterDone = null;
+  }
+
   setBaseAlpha(alpha: number): void {
     this.targetAlpha = alpha;
   }
@@ -353,6 +462,8 @@ export class Character {
     parent.addChild(this.workGlow);
     parent.addChild(this.sprite.container);
     this.sprite.container.addChild(this.overlay);
+    this.sprite.container.addChild(this.fx);
+    parent.addChild(this.deskCup);
     parent.addChild(this.thoughtBubble.container);
     this.enableClick();
     this.fadeDirection = 'in';
@@ -387,6 +498,7 @@ export class Character {
           this.thoughtBubble.hide();
           this.thoughtBubble.container.parent?.removeChild(this.thoughtBubble.container);
           this.workGlow.parent?.removeChild(this.workGlow);
+          this.deskCup.parent?.removeChild(this.deskCup);
         }
       }
     } else if (this.isVisible) {
@@ -401,9 +513,11 @@ export class Character {
     if (!this.isVisible) return;
 
     // Working agents stay seated; between tasks they wander the office.
+    // A cheer or a watering holds roaming so the effect plays out in place.
+    const heldByFx = this.cheerT >= 0 || this.waterT >= 0;
     if (this.state === 'walk') this.updateWalk(dt);
-    else if (this.wandering) this.updateWander(dt);
-    if (this.idleLoop) this.updateIdleLoop(dt);
+    else if (this.wandering && !heldByFx) this.updateWander(dt);
+    if (this.idleLoop && !heldByFx) this.updateIdleLoop(dt);
 
     this.sprite.container.zIndex = this.py;
     this.thoughtBubble.setPosition(this.px, this.py);
@@ -424,6 +538,132 @@ export class Character {
     }
 
     this.updateStatusGlyph(dt);
+    this.updateFx(dt);
+  }
+
+  /** True while parked in the seated pose at the HOME desk (not a café seat). */
+  isSittingAtDesk(): boolean {
+    if (!this.sitting) return false;
+    const t = this.getTilePosition();
+    return t.x === this.deskTile.x && t.y === this.deskTile.y;
+  }
+
+  // ── Effect rendering (cheer confetti, carried cup, watering, cup steam) ────
+
+  /** Carried-cup offset from the feet anchor, per facing direction. */
+  private carryOffset(): { x: number; y: number } {
+    switch (this.direction) {
+      case 'left':  return { x: -7, y: -9 };
+      case 'right': return { x: 7, y: -9 };
+      case 'up':    return { x: -5, y: -10 };
+      default:      return { x: 5, y: -9 };
+    }
+  }
+
+  /** Hand position while watering, per facing direction. */
+  private handOffset(): { x: number; y: number } {
+    switch (this.direction) {
+      case 'left':  return { x: -6, y: -9 };
+      case 'right': return { x: 6, y: -9 };
+      case 'up':    return { x: 0, y: -13 };
+      default:      return { x: 0, y: -6 };
+    }
+  }
+
+  /** A tiny coffee mug (white body, yellow stripe, handle) at (x, y) = its
+   *  bottom-left. Same silhouette as the mug the tileset used to bake onto
+   *  every desk — now it only exists where an agent actually put one down. */
+  private drawCup(g: Graphics, x: number, y: number): void {
+    g.rect(x, y - 4, 5, 4).fill(0xf2ede2);
+    g.rect(x, y - 2, 5, 1).fill(0xe8c14d);
+    g.rect(x + 5, y - 3, 1, 2).fill(0xd9d2c4);
+    g.rect(x, y - 4, 5, 1).fill(0xffffff);
+  }
+
+  private steamT = 0;
+
+  private updateFx(dt: number): void {
+    this.steamT += dt;
+
+    // ── Desk cup (world-anchored, persists while the agent roams) ───────────
+    if (this.deskCupOn && this.cupSpot) {
+      this.deskCup.clear();
+      this.drawCup(this.deskCup, 0, 0);
+      // two staggered steam pixels drifting up and fading
+      for (let i = 0; i < 2; i++) {
+        const ph = (this.steamT * 0.7 + i * 0.5) % 1;
+        this.deskCup.rect(1 + i * 2, -5 - Math.round(ph * 5), 1, 1)
+          .fill({ color: 0xffffff, alpha: 0.5 * (1 - ph) });
+      }
+    }
+
+    // ── Sprite-riding effects ────────────────────────────────────────────────
+    const active = this.cheerT >= 0 || this.waterT >= 0 || this.carryingCup;
+    if (!active) {
+      if (this.fxDirty) { this.fx.clear(); this.fxDirty = false; }
+      return;
+    }
+    this.fx.clear();
+    this.fxDirty = true;
+
+    // Cheer: happy hops + a confetti burst, ~1.6s, then back to whatever the
+    // avatar was doing (movement is held meanwhile — see update()).
+    if (this.cheerT >= 0) {
+      this.cheerT += dt;
+      const t = this.cheerT;
+      if (t >= 1.6) {
+        this.cheerT = -1;
+        this.sprite.setPosition(this.px, this.py); // land the final hop
+      } else {
+        const decay = 1 - t / 1.6;
+        const hop = Math.abs(Math.sin(t * Math.PI * 2.2)) * 5 * decay;
+        this.sprite.setPosition(this.px, this.py - hop);
+        for (const p of this.confetti) {
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vy += 110 * dt;
+          const alpha = Math.max(0, Math.min(1, (1.45 - t) / 0.5));
+          this.fx.rect(Math.round(p.x), Math.round(p.y), 2, 2).fill({ color: p.c, alpha });
+        }
+      }
+    }
+
+    // Carried cup, riding in the hand on the facing side (+ steam).
+    if (this.carryingCup) {
+      const o = this.carryOffset();
+      this.drawCup(this.fx, o.x, o.y);
+      const ph = (this.steamT * 0.9) % 1;
+      this.fx.rect(o.x + 2, o.y - 5 - Math.round(ph * 4), 1, 1)
+        .fill({ color: 0xffffff, alpha: 0.5 * (1 - ph) });
+    }
+
+    // Watering: a little can in the hand and an arc of droplets falling onto
+    // the plant in front, until the duration elapses → onDone (resume idling).
+    if (this.waterT >= 0) {
+      this.waterT += dt;
+      if (this.waterT >= this.waterDur) {
+        this.waterT = -1;
+        const cb = this.onWaterDone;
+        this.onWaterDone = null;
+        cb?.();
+      } else {
+        const h = this.handOffset();
+        const dirX = this.direction === 'left' ? -1 : this.direction === 'right' ? 1 : 0;
+        const dirY = this.direction === 'up' ? -1 : this.direction === 'down' ? 1 : 0;
+        // can body + spout toward the plant
+        this.fx.rect(h.x - 2, h.y - 2, 5, 3).fill(0x9aa7b0);
+        this.fx.rect(h.x + (dirX >= 0 ? 3 : -4), h.y - 2, 2, 1).fill(0x9aa7b0);
+        for (let i = 0; i < 4; i++) {
+          const ph = (this.waterT * 1.3 + i / 4) % 1;
+          const reach = 4 + ph * 7;
+          const dx = dirX !== 0 ? reach * dirX : (i - 1.5) * 1.5;
+          const dy = dirY !== 0 ? reach * dirY : 0;
+          const fall = ph * ph * 9;
+          this.fx.rect(Math.round(h.x + dx), Math.round(h.y + dy + fall - 2), 1, 2)
+            .fill({ color: 0x5bb7e8, alpha: 1 - ph * 0.45 });
+        }
+      }
+    }
   }
 
   private updateStatusGlyph(dt: number): void {
@@ -572,5 +812,8 @@ export class Character {
     this.sprite.destroy();
     this.workGlow.destroy();
     this.overlay.destroy();
+    this.fx.destroy();
+    this.deskCup.parent?.removeChild(this.deskCup);
+    this.deskCup.destroy();
   }
 }

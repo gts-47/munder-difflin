@@ -6,6 +6,7 @@ import { useStore, type Agent } from '@/store/store';
 import { TiledMapRenderer, type TiledMap } from './TiledMapRenderer';
 import { Camera } from './Camera';
 import { Character } from './Character';
+import { DeskScreen, MONITOR_OFF_TOPLEFT_GID } from './DeskScreen';
 import { MessageEnvelope, type MessageAct } from './MessageEnvelope';
 import { getCastFrames, CAST_BY_NAME, hexToNumber, DEFAULT_CHARACTER } from './cast';
 import { pickSoloLine, pickExchange, type BreakSpot } from './cafeteriaLines';
@@ -52,6 +53,13 @@ interface CafeBreak {
   chattingWith?: string;           // set on the partner: stays put & stays quiet
 }
 
+/** A plant-watering errand in progress for one agent. */
+interface WateringRun {
+  phase: 'walking' | 'watering';
+  timer: number;
+  plantIdx: number;
+}
+
 interface Runtime {
   character: Character;
   seatIndex: number | null;
@@ -62,7 +70,20 @@ interface Runtime {
   prevCarrying?: string;
   prevPrompt?: string;
   brk?: CafeBreak;
+  /** This desk's monitor overlay — lit while its agent is seated. */
+  screen?: DeskScreen;
+  /** Walking a fresh coffee from the break room home to the desk. */
+  cupCarryHome?: boolean;
+  /** Walking the empty desk cup back to the break room. */
+  returningCup?: boolean;
+  wtr?: WateringRun;
 }
+
+/** Lines an avatar throws over its shoulder right after finishing a task. */
+const CHEER_LINES = [
+  'done! ✔', 'nailed it', "that's a wrap", 'ship it 🚀', 'another one done',
+  'crushed it', 'in the books'
+] as const;
 
 /** Patch the map's external (.tsx) tileset refs with the inline metadata the
  *  renderer needs — mirrors the reference repo's OfficeScene.init(). */
@@ -331,13 +352,33 @@ export function OfficeFloor() {
         rt.brk = undefined;
       };
 
-      // End a break gracefully: free the seat, drop the bubble, resume normal idle.
+      // End a break gracefully: free the seat, drop the bubble, resume normal
+      // idle. Most breaks end with TAKING A COFFEE back to the desk: the agent
+      // walks home cup-in-hand, parks it beside the monitor (the tick below
+      // spots the arrival), and wanders off — the cup stays, steaming, until
+      // the next break takes it back to the kitchen.
       const endBreak = (id: string, rt: Runtime): void => {
+        const spot = rt.brk ? cafeSpots[rt.brk.spotIdx] : undefined;
+        const arrived = rt.brk?.phase === 'lingering';
         releaseBreak(rt);
         rt.character.hideThought();
+        if (rt.returningCup) {
+          // The cup made it back to the kitchen (or vanishes with the watchdog).
+          rt.returningCup = false;
+          rt.character.setCarryingCup(false);
+        }
         const agent = agentById(id);
-        if (agent?.isGod) rt.character.sitAtDesk(true);
-        else rt.character.startWandering();
+        if (agent?.isGod) { rt.character.sitAtDesk(true); return; }
+        const takesCoffee = arrived && !!spot
+          && (spot.spot === 'coffee' || (spot.spot === 'table' && Math.random() < 0.6))
+          && !rt.character.hasCupOnDesk();
+        if (takesCoffee) {
+          rt.character.setCarryingCup(true);
+          rt.cupCarryHome = true;
+          rt.character.sitAtDesk(false); // walk it home; the tick parks it
+        } else {
+          rt.character.startWandering();
+        }
       };
 
       const startBreak = (id: string, rt: Runtime): void => {
@@ -358,9 +399,20 @@ export function OfficeFloor() {
         cafeTaken[idx] = id;
         rt.brk = { spotIdx: idx, phase: 'walking', timer: 0, quipTimer: 0 };
         const c = rt.character;
+        // A cup still parked on the desk goes back to the kitchen with them.
+        if (c.hasCupOnDesk()) {
+          c.setCupOnDesk(false);
+          c.setCarryingCup(true);
+          rt.returningCup = true;
+        }
         c.walkToAndThen(spot.tile, () => {
           // Bail if the break was cancelled or reassigned while walking.
           if (!rt.brk || rt.brk.spotIdx !== idx) return;
+          if (rt.returningCup) {
+            // Cup returned — onto the tray it goes.
+            rt.returningCup = false;
+            c.setCarryingCup(false);
+          }
           if (spot.seated) c.sitInPlace(spot.facing);
           else { c.setIdle(); c.faceDirection(spot.facing); }
           rt.brk.phase = 'lingering';
@@ -372,7 +424,7 @@ export function OfficeFloor() {
       };
 
       const breakEligible = (agent: Agent, rt: Runtime): boolean => {
-        if (agent.isGod || rt.brk) return false;
+        if (agent.isGod || rt.brk || rt.wtr || rt.cupCarryHome) return false;
         if (agent.status !== 'idle' && agent.status !== 'success') return false;
         return !rt.character.isSitting();   // already parked at a desk → leave it
       };
@@ -438,6 +490,92 @@ export function OfficeFloor() {
         startBreak(agent.id, rt);
       };
 
+      // ─── Plants: watering errands for the truly idle ───────────────────────
+      // The office plants (painted into the map) each have a stand tile next to
+      // them. Every so often one idle agent strolls over, faces the plant, and
+      // gives it a drink — small, purposeful busywork for a quiet floor.
+      const PLANTS: Array<{ stand: Tile; facing: Facing }> = [
+        { stand: { x: 2, y: 20 }, facing: 'left' },   // tall plant, bottom-left corner
+        { stand: { x: 22, y: 20 }, facing: 'right' }, // tall plant, end of the desk rows
+        { stand: { x: 30, y: 20 }, facing: 'right' }, // tall plant, right room
+        { stand: { x: 6, y: 4 }, facing: 'up' },      // potted plant, the CEO office
+        { stand: { x: 17, y: 4 }, facing: 'up' }      // potted plant, the corridor
+      ];
+      const plantTaken: (string | null)[] = new Array(PLANTS.length).fill(null);
+
+      const releaseWatering = (id: string, rt: Runtime): void => {
+        if (!rt.wtr) return;
+        plantTaken[rt.wtr.plantIdx] = null;
+        rt.wtr = undefined;
+        rt.character.stopWatering();
+      };
+
+      let wtrCooldown = 20;
+      const updateWatering = (dt: number): void => {
+        // Watchdog walking errands that never arrive; everything else is event-driven.
+        for (const [id, rt] of runtimes) {
+          if (!rt.wtr) continue;
+          rt.wtr.timer += dt;
+          if (rt.wtr.phase === 'walking' && rt.wtr.timer > 20) {
+            releaseWatering(id, rt);
+            rt.character.startWandering();
+          }
+        }
+        wtrCooldown -= dt;
+        if (wtrCooldown > 0) return;
+        wtrCooldown = 16 + Math.random() * 22;
+        if (Math.random() >= 0.6) return;          // keep it occasional
+        const freePlants = PLANTS.map((_, i) => i).filter((i) => !plantTaken[i]);
+        if (freePlants.length === 0) return;
+        const candidates: Array<[Agent, Runtime]> = [];
+        for (const agent of useStore.getState().agents) {
+          const rt = runtimes.get(agent.id);
+          if (rt && breakEligible(agent, rt)) candidates.push([agent, rt]);
+        }
+        if (candidates.length === 0) return;
+        const [agent, rt] = candidates[Math.floor(Math.random() * candidates.length)];
+        const plantIdx = freePlants[Math.floor(Math.random() * freePlants.length)];
+        const plant = PLANTS[plantIdx];
+        const c = rt.character;
+        plantTaken[plantIdx] = agent.id;
+        rt.wtr = { phase: 'walking', timer: 0, plantIdx };
+        c.walkToAndThen(plant.stand, () => {
+          if (!rt.wtr || rt.wtr.plantIdx !== plantIdx) return;
+          rt.wtr.phase = 'watering';
+          rt.wtr.timer = 0;
+          c.faceDirection(plant.facing);
+          c.showThought('watering the plants 🌿');
+          c.startWatering(4.5, () => {
+            releaseWatering(agent.id, rt);
+            c.hideThought();
+            c.startWandering();
+          });
+        });
+      };
+
+      // ─── Coffee delivery + desk screens, every frame ───────────────────────
+      const updateDeskLife = (dt: number): void => {
+        for (const [id, rt] of runtimes) {
+          // Park the carried coffee the moment its courier is seated at home —
+          // then, if there's still nothing to do, get up and wander off (the
+          // cup stays, steaming, beside the monitor).
+          if (rt.cupCarryHome && rt.character.isSittingAtDesk()) {
+            rt.cupCarryHome = false;
+            rt.character.setCarryingCup(false);
+            rt.character.setCupOnDesk(true);
+            const agent = agentById(id);
+            if (agent && !agent.isGod && (agent.status === 'idle' || agent.status === 'success')) {
+              rt.character.startWandering();
+            }
+          }
+          // The monitor lights up whenever its owner is in the chair.
+          if (rt.screen) {
+            rt.screen.setOn(rt.character.isSittingAtDesk());
+            rt.screen.update(dt);
+          }
+        }
+      };
+
       const addCharacter = async (agent: Agent) => {
         const charName = CAST_BY_NAME[agent.character] ? agent.character : DEFAULT_CHARACTER;
         const member = CAST_BY_NAME[charName];
@@ -464,15 +602,30 @@ export function OfficeFloor() {
           onClick: (id) => useStore.getState().select(id),
         });
         character.show(charLayer);
-        runtimes.set(agent.id, { character, seatIndex, waitTile, charName });
-        applyState(agent, runtimes.get(agent.id)!, true);
+        const rt: Runtime = { character, seatIndex, waitTile, charName };
+        // Standard desks paint the 2×2 PC monitor two rows above the seat —
+        // give those a DeskScreen (lights up while seated) and a cup spot
+        // beside the monitor, exactly where the tileset's baked-in mug used
+        // to sit before we cleared it (desks start clean now; cups only exist
+        // where an agent actually carried one).
+        if (mapRenderer.gidAt('furniture-above', seatTile.x, seatTile.y - 2) === MONITOR_OFF_TOPLEFT_GID) {
+          const top = { x: seatTile.x, y: seatTile.y - 2 };
+          rt.screen = new DeskScreen(mapRenderer, top);
+          charLayer.addChild(rt.screen.container);
+          const ts2 = mapRenderer.tileSize;
+          character.setCupSpot({ x: top.x * ts2 + 18, y: top.y * ts2 + 23 });
+        }
+        runtimes.set(agent.id, rt);
+        applyState(agent, rt, true);
       };
 
       const removeCharacter = (id: string) => {
         const rt = runtimes.get(id);
         if (!rt) return;
         releaseBreak(rt);                // free any café seat it was holding
+        releaseWatering(id, rt);         // and any plant it was tending
         if (rt.seatIndex != null) seatClaims.delete(rt.seatIndex);
+        rt.screen?.destroy();
         rt.character.hide(0);
         // give the fade-out a moment, then destroy
         setTimeout(() => rt.character.destroy(), 700);
@@ -487,6 +640,11 @@ export function OfficeFloor() {
           || rt.prevCarrying !== agent.carrying
           || rt.prevPrompt !== agent.lastPrompt;
         if (!changed) return;
+        // Finishing real work (working/thinking/compacting → done) earns a
+        // little celebration before the avatar goes back to roaming.
+        const finishedWork = !force && !agent.isGod
+          && (rt.prevStatus === 'working' || rt.prevStatus === 'thinking' || rt.prevStatus === 'compacting')
+          && (agent.status === 'idle' || agent.status === 'success');
         rt.prevStatus = agent.status;
         rt.prevAction = agent.action;
         rt.prevCarrying = agent.carrying;
@@ -505,6 +663,15 @@ export function OfficeFloor() {
             return;
           }
           releaseBreak(rt);
+        }
+        // Same for a watering errand: idle refreshes leave it alone, real work
+        // cancels it (the can disappears, the agent heads to its desk).
+        if (rt.wtr) {
+          if (agent.status === 'idle' || agent.status === 'success') {
+            c.setStatusGlyph(agent.status === 'success' ? 'success' : 'none');
+            return;
+          }
+          releaseWatering(agent.id, rt);
         }
 
         // A thought cloud above the head shows what the agent is doing RIGHT NOW
@@ -546,8 +713,14 @@ export function OfficeFloor() {
             break;
           case 'success':
             c.setStatusGlyph('success');
-            c.hideThought();
-            if (agent.isGod) c.sitAtDesk(true); else c.startWandering();
+            if (agent.isGod) { c.hideThought(); c.sitAtDesk(true); break; }
+            c.startWandering();
+            if (finishedWork) {
+              c.cheer();
+              c.showThought(CHEER_LINES[Math.floor(Math.random() * CHEER_LINES.length)]);
+            } else {
+              c.hideThought();
+            }
             break;
           case 'ghost':
             c.setStatusGlyph('none');
@@ -559,6 +732,12 @@ export function OfficeFloor() {
             c.setStatusGlyph('none');
             // The god runs the floor from its desk; everyone else wanders when idle.
             if (agent.isGod) { c.sitAtDesk(true); c.showThought(liveActivity(agent, 'running the floor')); }
+            else if (finishedWork) {
+              // Task done → a quick cheer on the spot, then back to roaming.
+              c.startWandering();
+              c.cheer();
+              c.showThought(CHEER_LINES[Math.floor(Math.random() * CHEER_LINES.length)]);
+            }
             else { c.startWandering(); c.showThought(liveActivity(agent, 'idle')); }
             break;
         }
@@ -680,6 +859,8 @@ export function OfficeFloor() {
           rt.character.update(dt);
         }
         updateCafeteria(dt);
+        updateWatering(dt);
+        updateDeskLife(dt);
         resolveBubbleOverlaps();
         for (let i = envelopes.length - 1; i >= 0; i--) {
           if (envelopes[i].update(dt)) {
