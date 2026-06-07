@@ -447,6 +447,9 @@ export function OfficeFloor() {
       // stack on the little table at the end. Clicking any of it selects
       // Michael and opens the Command Center's tasks tab.
       const BOARD_TILE: Tile = { x: 6, y: 10 };
+      // The ensemble (two boards + archive table) is 82px wide; the wall run
+      // between the two doorways spans tiles 6..12 (112px) — center it.
+      const BOARD_CENTER_PAD = 15;
       const NOTE_COLORS: Record<string, number> = {
         todo: 0xf2df8a, doing: 0x9ecbf0, blocked: 0xf0a3a3, done: 0xa8e0b0
       };
@@ -455,7 +458,7 @@ export function OfficeFloor() {
       const boardG = new Graphics();
       boardG.eventMode = 'static';
       boardG.cursor = 'pointer';
-      boardG.position.set(BOARD_TILE.x * tsB, BOARD_TILE.y * tsB);
+      boardG.position.set(BOARD_TILE.x * tsB + BOARD_CENTER_PAD, BOARD_TILE.y * tsB);
       boardG.zIndex = (BOARD_TILE.y + 1) * tsB;
       boardG.on('pointertap', (ev) => {
         ev.stopPropagation();
@@ -557,8 +560,8 @@ export function OfficeFloor() {
         stand: Tile;
         thought: string;
       }
-      const PIN_STAND: Tile = { x: 5, y: 11 };      // in front of the boards
-      const TAKE_STAND: Tile = { x: 8, y: 11 };     // under the todo board
+      const PIN_STAND: Tile = { x: 8, y: 11 };      // under the blockers board
+      const TAKE_STAND: Tile = { x: 9, y: 11 };     // under the todo board
       const ARCHIVE_STAND: Tile = { x: 12, y: 11 }; // beside the archive table
       /** What the boards currently SHOW (lags the ledger while moves play). */
       let visualTasks = new Map<string, BoardTask>();
