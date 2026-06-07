@@ -448,6 +448,12 @@ export function useHive(config: HarnessConfig | null): void {
       lastFlush.current[target.id] = now;
       // Remove first so a burst of store updates can't double-send the same one.
       removeQueuedMessage(srcId, next.id);
+      // Zero the gauge instantly on /clear — the new session's context isn't
+      // known until statusLine fires after the first post-clear response, so
+      // leaving it at the old value shows a stale-full bar during that window.
+      if (next.text.trimStart().startsWith('/clear')) {
+        useStore.getState().updateAgent(target.id, { contextTokens: 0, contextLimit: undefined, progress: 0 });
+      }
       submitToPty(target.ptyId, wrap ? wrap(next.text) : next.text).catch(() => { /* pty may have died */ });
       return true;
     };
