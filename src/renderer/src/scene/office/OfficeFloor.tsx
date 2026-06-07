@@ -70,6 +70,7 @@ interface CoffeeRun {
   timer: number;
 }
 
+
 interface Runtime {
   character: Character;
   seatIndex: number | null;
@@ -940,6 +941,15 @@ export function OfficeFloor() {
             return;
           }
           releaseErrand(rt);
+        }
+        // And for a coffee run: real work cancels it mid-stride — a mug already
+        // in hand simply rides along to the desk (cupCarryHome parks it there).
+        if (rt.run) {
+          if (agent.status === 'idle' || agent.status === 'success') {
+            c.setStatusGlyph(agent.status === 'success' ? 'success' : 'none');
+            return;
+          }
+          releaseRun(rt);
         }
         // And for a coffee run: real work cancels it mid-stride — a mug already
         // in hand simply rides along to the desk (cupCarryHome parks it there).
