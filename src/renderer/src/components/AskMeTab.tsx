@@ -7,10 +7,13 @@ import { type HiveTask, openQuestion, waitsOnHuman } from './TasksKanban';
 /**
  * ASK ME — first-class human feedback through the task system.
  *
- * Tasks the god can only move with the human's input sit here: each card shows
- * its open question, a place to answer, and the CASCADE of downstream tasks
- * that are stuck waiting on this one — so "why isn't X done?" reads as "ah,
- * because I still owe an answer here."
+ * Tasks the god can only move with the human's input sit here. An entry isn't
+ * necessarily a question — it can be a TO-DO only the human can perform
+ * (create an account, approve a purchase, provide credentials, test on a real
+ * device). Each card shows the open ask, a place to respond (an answer, or a
+ * "done, here's the result" confirmation), and the CASCADE of downstream
+ * tasks stuck waiting on this one — so "why isn't X done?" reads as "ah,
+ * because I still owe something here."
  *
  * Sending an answer does two things atomically-ish:
  *   1. writes it into the card's humanQA entry in hive/tasks.json (the
@@ -100,7 +103,8 @@ export function AskMeTab() {
         <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--cth-ink-500)', fontSize: 13 }}>
           Nothing needs you right now. 🌿<br />
           <span style={{ fontSize: 11, color: 'var(--cth-ink-300)' }}>
-            When the team blocks a task on your input, it shows up here (and on the ASK ME board on the floor).
+            When the team blocks a task on your input — a question to answer or a to-do only
+            you can perform — it shows up here (and on the ASK ME board on the floor).
           </span>
         </div>
       )}
@@ -135,7 +139,7 @@ export function AskMeTab() {
                 onChange={(e) => setDrafts((d) => ({ ...d, [t.id]: e.target.value }))}
                 onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void sendAnswer(t); }}
                 rows={3}
-                placeholder="Your answer… (Ctrl+Enter to send)"
+                placeholder="Your answer — or 'done', with the result… (Ctrl+Enter to send)"
                 style={{
                   width: '100%', boxSizing: 'border-box', padding: '6px 8px', resize: 'vertical',
                   background: 'var(--cth-paper-100)', border: 'none',
@@ -150,7 +154,7 @@ export function AskMeTab() {
                   disabled={!(drafts[t.id] ?? '').trim() || sending === t.id}
                   onClick={() => void sendAnswer(t)}
                 >
-                  {sending === t.id ? 'sending…' : 'answer & unblock'}
+                  {sending === t.id ? 'sending…' : 'respond & unblock'}
                 </PixelButton>
                 {(t.humanQA?.filter((e) => e.a).length ?? 0) > 0 && (
                   <span style={{ fontSize: 10, color: 'var(--cth-ink-500)', fontFamily: 'var(--cth-font-display)' }}>
