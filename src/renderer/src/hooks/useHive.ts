@@ -104,8 +104,17 @@ const TOOL_STATION: Record<string, { station: StationKind; carry?: ToolKind }> =
  *  the MCP station (previously these silently sat at the desk, #5A gap); anything
  *  else → the desk. */
 function stationForTool(tool: string): { station: StationKind; carry?: ToolKind } {
-  return TOOL_STATION[tool]
-    ?? (tool.startsWith('mcp__') ? { station: 'mcp', carry: 'MCP' } : { station: 'desk' });
+  if (TOOL_STATION[tool]) return TOOL_STATION[tool];
+  if (tool.startsWith('mcp__')) return { station: 'mcp', carry: 'MCP' };
+  // Heuristic fallback for non-Claude tool names (Antigravity sends run_command,
+  // ListDir, write_file, … — its hook names differ from Claude's exact tags).
+  // Match write/edit BEFORE read so "write_file" → desk, not shelf.
+  const t = tool.toLowerCase();
+  if (/command|bash|shell|exec|terminal|run_/.test(t)) return { station: 'terminal', carry: 'Bash' };
+  if (/web|fetch|browser|http|url/.test(t)) return { station: 'web', carry: 'WebFetch' };
+  if (/write|edit|create|patch|replace|apply/.test(t)) return { station: 'desk', carry: 'Write' };
+  if (/read|list|view|dir|glob|grep|search|find|file|cat|\bls\b/.test(t)) return { station: 'shelf', carry: 'Read' };
+  return { station: 'desk' };
 }
 
 /**

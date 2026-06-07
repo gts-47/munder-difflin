@@ -39,6 +39,10 @@ export function AgentStrip({ config }: AgentStripProps) {
           args,
           cols: 100,
           rows: 30,
+          // Continue the worker's prior CLI session if one was recorded — the
+          // main process picks the provider's resume flag (Claude --resume,
+          // agy --conversation). No-op when there's no recorded session id.
+          resume: true,
           // Re-request isolation if the agent ran in its own worktree before —
           // the old worktree was torn down on exit, so a fresh one is created.
           isolate: !!a.worktreePath,

@@ -25,7 +25,7 @@ import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer } from './slack';
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
-import { inferAgentProvider, isClaudeProvider, type AgentProvider } from '../shared/agentProvider';
+import { inferAgentProvider, isClaudeProvider, providerPreset, type AgentProvider } from '../shared/agentProvider';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const ptyManager = new PtyManager();
@@ -711,13 +711,20 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
     if (typeof cfg.maxTurns === 'number' && cfg.maxTurns > 0 && !args.includes('--max-turns')) {
       args.push('--max-turns', String(cfg.maxTurns));
     }
-    // Idempotent resume (#6.6a): only when explicitly requested and we have a
-    // prior session id for this agent.
-    if (opts.resume === true) {
-      const sid = hive.lastSession(opts.hive.id);
-      if (sid && !args.includes('--resume')) args.push('--resume', sid);
-    }
     opts.args = args;
+  }
+  // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude
+  // `--resume <sid>`, Antigravity `--conversation <id>`. The recorded session id
+  // comes from hook payloads (agy's conversationId flows through the bridge), so
+  // a restored worker continues its prior CLI session. Only when requested AND a
+  // prior id exists for this agent.
+  if (opts.hive && opts.resume === true) {
+    const rf = providerPreset(provider).resumeFlag;
+    const sid = hive.lastSession(opts.hive.id);
+    if (rf && sid) {
+      const args = opts.args ?? [];
+      if (!args.includes(rf)) { args.push(rf, sid); opts.args = args; }
+    }
   }
   // Remember which agent owns this PTY so closing the tab can archive it. A
   // live terminal means active — ensureAgent above already cleared `archived`.

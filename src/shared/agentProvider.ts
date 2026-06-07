@@ -39,6 +39,10 @@ export interface AgentProviderPreset {
    *  hive identity+protocol rides in as the first turn — the closest thing to
    *  Claude's `--append-system-prompt` these CLIs offer. undefined = no way in. */
   initialPromptFlag?: string;
+  /** Flag to resume a prior session on respawn, given the recorded session id
+   *  (Claude `--resume <sid>`, Antigravity `--conversation <id>`). undefined = no
+   *  resume support, spawn fresh. */
+  resumeFlag?: string;
 }
 
 export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
@@ -50,7 +54,8 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     modelFlag: '--model',
     autoFlag: '--permission-mode bypassPermissions',
     hiveAware: true,
-    canReceiveInbox: true
+    canReceiveInbox: true,
+    resumeFlag: '--resume'
   },
   {
     id: 'antigravity',
@@ -61,7 +66,8 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     autoFlag: '--dangerously-skip-permissions',
     hiveAware: false,
     canReceiveInbox: true, // via the agy-hook bridge (Stop→drain); verified agy honors hook decisions
-    initialPromptFlag: '-i' // agy --prompt-interactive: orient the session, then continue
+    initialPromptFlag: '-i', // agy --prompt-interactive: orient the session, then continue
+    resumeFlag: '--conversation' // agy: resume a previous conversation by ID
   },
   {
     id: 'custom',

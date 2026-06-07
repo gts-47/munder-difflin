@@ -74,6 +74,9 @@ export interface SpawnPtyOptions {
   hive?: HiveAgentMeta;
   /** When true (and cwd is a git repo), spawn the agent in its own git worktree. */
   isolate?: boolean;
+  /** When true, continue the agent's prior CLI session if one was recorded
+   *  (provider-aware: Claude `--resume`, Antigravity `--conversation`). */
+  resume?: boolean;
 }
 
 export interface PtyExit { exitCode: number; signal?: number | undefined }
