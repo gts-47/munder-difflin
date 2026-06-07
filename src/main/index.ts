@@ -34,7 +34,11 @@ const ptyManager = new PtyManager();
 const ptyToAgent = new Map<string, string>();
 const hive = new HiveManager(
   () => readConfig().harnessHome,
-  (channel, payload) => { try { liveWebContents()?.send(channel, payload); } catch { /* window tore down */ } }
+  (channel, payload) => {
+    const wc = liveWebContents();
+    if (!wc) return false;
+    try { wc.send(channel, payload); return true; } catch { return false; }
+  }
 );
 // #7C — operator control state (pause/gate/steer/halt), read by the HookServer
 // when deciding hook returns.

@@ -141,7 +141,7 @@ export class HiveManager {
    */
   constructor(
     private getHome: () => string | null,
-    private emit?: (channel: string, payload: unknown) => void
+    private emit?: (channel: string, payload: unknown) => boolean | void
   ) {}
 
   private routerTimer: NodeJS.Timeout | null = null;
@@ -566,7 +566,13 @@ export class HiveManager {
         continue;
       }
       if (target && !isClaudeProvider(target.provider ?? 'claude')) {
-        this.emitTerminalHandoff(msg, t);
+        if (!this.emitTerminalHandoff(msg, t)) {
+          this.deliver({
+            ...msg,
+            to: godId,
+            subject: `[terminal handoff failed — "${t}" uses ${target.provider ?? 'custom'}; renderer unavailable] ${msg.subject}`
+          }, godId);
+        }
         continue;
       }
       this.deliver(msg, t);
@@ -593,16 +599,27 @@ export class HiveManager {
 
   /** Non-Claude providers cannot drain hive inbox; hand direct mail to the
    *  renderer so it can queue a terminal work order for the target PTY. */
-  private emitTerminalHandoff(msg: HiveMessage, targetId: string): void {
-    this.emit?.('hive:terminalHandoff', {
+  private emitTerminalHandoff(msg: HiveMessage, targetId: string): boolean {
+    const delivered = this.emit?.('hive:terminalHandoff', {
       id: msg.id,
       from: msg.from,
       to: targetId,
       act: msg.act,
       subject: msg.subject,
       body: msg.body,
+      requiresReply: msg.requires_reply,
       createdAt: msg.created_at
+    }) === true;
+    this.appendLog({
+      kind: 'terminal-handoff',
+      from: msg.from,
+      to: targetId,
+      act: msg.act,
+      subject: msg.subject,
+      id: msg.id,
+      delivered
     });
+    return delivered;
   }
 
   // — router: drain outboxes → inboxes —

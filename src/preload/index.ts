@@ -69,6 +69,7 @@ export interface HiveTerminalHandoffEvent {
   act: 'request' | 'inform' | 'propose' | 'query' | 'agree' | 'refuse' | 'done';
   subject: string;
   body: string;
+  requiresReply: boolean;
   createdAt: string;
 }
 

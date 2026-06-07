@@ -92,14 +92,21 @@ function enrichTaskPrompt(text: string): string {
 }
 
 function terminalWorkOrderPrompt(msg: {
+  id: string;
   from: string;
+  act: string;
   subject: string;
   body: string;
+  requiresReply: boolean;
+  createdAt: string;
 }): string {
   return [
     'WORK ORDER FROM HIVE',
+    `Message: ${msg.id}`,
     `From: ${msg.from}`,
     `Subject: ${msg.subject}`,
+    `Act: ${msg.act}${msg.requiresReply ? ' (reply expected)' : ''}`,
+    `Issued: ${msg.createdAt}`,
     '',
     msg.body,
     '',
@@ -159,6 +166,7 @@ export function useHive(config: HarnessConfig | null): void {
   // must leave the agent alone — set while its boot sequence is typing so nothing
   // collides with /remote-control + the orientation prompt.
   const bootGraceUntil = useRef<Record<string, number>>({});
+  const seenTerminalHandoffs = useRef<Set<string>>(new Set());
   // Reactive so the assistant bootstrap (effect #1b) re-runs once Michael is ready.
   const godStatus = useStore((s) => s.godStatus);
   // #5C/#7C.4 — latest circuit-breaker level per agent. When 'constrained'/
@@ -426,12 +434,17 @@ export function useHive(config: HarnessConfig | null): void {
   useEffect(() => {
     if (!config?.onboardingComplete) return;
     return window.cth.onHiveTerminalHandoff((msg) => {
-      const { agents, enqueueMessage } = useStore.getState();
+      if (seenTerminalHandoffs.current.has(msg.id)) return;
+      const { agents, enqueueMessage, messageQueues } = useStore.getState();
       const target = agents.find((a) => a.id === msg.to);
       if (target?.ptyId) {
+        const marker = `Message: ${msg.id}`;
+        if ((messageQueues[target.id] ?? []).some((queued) => queued.text.includes(marker))) return;
+        seenTerminalHandoffs.current.add(msg.id);
         enqueueMessage(target.id, terminalWorkOrderPrompt(msg));
         return;
       }
+      seenTerminalHandoffs.current.add(msg.id);
       enqueueMessage(
         GOD_ID,
         [
