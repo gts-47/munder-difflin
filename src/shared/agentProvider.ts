@@ -39,15 +39,28 @@ export interface AgentProviderPreset {
   autoFlag?: string;
   /** Claude Code accepts the hive identity injection (`--append-system-prompt`
    *  + hook `--settings`). Other CLIs don't — they spawn with the shared AGENT_*
-   *  env only. Gates the Claude-specific spawn injection in hive.ensureAgent. */
+   *  env only. Gates the Claude-specific spawn injection in hive.ensureAgent.
+   *  NOTE: this gates the *Claude-only* flag path specifically — it is NOT the
+   *  same as "participates in the hive". A non-hiveAware provider can still be a
+   *  full hive citizen (live status + Stop→inbox-drain) via a `hookBridge`. */
   hiveAware: boolean;
+  /** Which config-file lifecycle-hook bridge a NON-hiveAware provider uses to get
+   *  the same live status + Stop→inbox-drain that Claude gets from `--settings`:
+   *    - 'agy'   → installAgyHooks() writes ~/.gemini/.../hooks.json (translating
+   *                shim, because agy's stdin/stdout shape differs from Claude's).
+   *    - 'codex' → installCodexHooks() writes a per-agent CODEX_HOME/hooks.json and
+   *                reuses the Claude `cth-hook` shim verbatim (Codex's hook payload
+   *                + response contract are already Claude-shaped).
+   *  Claude leaves this undefined (it uses its native `--settings` path, gated by
+   *  hiveAware); `custom` leaves it undefined (no bridge → no hooks). This is the
+   *  single switch hive.ensureAgent dispatches on to wire the bridge. */
+  hookBridge?: 'agy' | 'codex';
   /** Whether the router may DELIVER inbox mail to this provider (vs bouncing it
    *  to the god). Requires a way for the agent to actually drain its inbox: Claude
-   *  via its Stop hook, Antigravity via the agy-hook bridge's Stop→drain, Codex
-   *  via the renderer's idle inbox-wake nudge (no hook surface of its own). A
-   *  provider with no inbox-drain path (custom) can't, so its mail still bounces.
+   *  via its Stop hook, and Antigravity/Codex via their `hookBridge` Stop→drain.
+   *  A provider with no inbox-drain path (custom) can't, so its mail still bounces.
    *  Distinct from hiveAware: agy/codex are NOT hiveAware (no Claude injection)
-   *  but CAN receive inbox. */
+   *  but CAN receive inbox via their bridge. */
   canReceiveInbox: boolean;
   /** For non-hive-aware CLIs that still take an INITIAL prompt to orient the
    *  session (Antigravity's `agy -i "<prompt>"`), the flag to pass it under. The
@@ -90,14 +103,19 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     nonInteractiveEnv: { CODEX_NON_INTERACTIVE: '1' },
     supportsModel: true,
     modelFlag: '--model',
-    // Codex is NOT hiveAware: it has no Claude `--append-system-prompt`/`--settings`
-    // hook surface. The hive protocol is injected as Codex's INITIAL prompt, which
-    // it takes POSITIONALLY (`codex "<prompt>"`) — hence initialPromptFlag is
-    // undefined and hive.ts appends the prompt as a quoted trailing arg.
+    // Codex is NOT hiveAware in the Claude-flag sense: it has no
+    // `--append-system-prompt`/`--settings`. The hive protocol is injected as
+    // Codex's INITIAL prompt, which it takes POSITIONALLY (`codex "<prompt>"`) —
+    // hence initialPromptFlag is undefined and hive.ts appends it as a trailing arg.
     hiveAware: false,
-    // Codex can receive inbox: it has no Stop hook, but the renderer's idle
-    // inbox-wake nudge types the "you have new inbox mail" line into idle Codex
-    // PTYs (same path as agy), so mail is delivered rather than bounced to god.
+    // …but Codex DOES expose a Claude-style hooks system (hooks.json / config.toml
+    // [hooks]; PreToolUse/PostToolUse/Stop/…), so it gets full hive parity via the
+    // 'codex' bridge: a per-agent CODEX_HOME/hooks.json wired to the cth-hook shim
+    // (see hive.installCodexHooks). Stop→drain works natively (Codex's Stop honors
+    // {decision:'block',reason} = continue-with-prompt, exactly like Claude).
+    hookBridge: 'codex',
+    // Inbox drains via the codex-hook bridge's Stop→drain (the renderer's idle
+    // inbox-wake nudge remains as a harmless fallback for an idle worker).
     canReceiveInbox: true,
     initialPromptFlag: undefined,
     // Codex has no stable session-resume CLI flag in the curated reference; spawn
@@ -114,6 +132,7 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
     modelFlag: '--model',
     autoFlag: '--dangerously-skip-permissions',
     hiveAware: false,
+    hookBridge: 'agy', // installAgyHooks() → ~/.gemini/.../hooks.json (translating shim)
     canReceiveInbox: true, // via the agy-hook bridge (Stop→drain); verified agy honors hook decisions
     initialPromptFlag: '-i', // agy --prompt-interactive: orient the session, then continue
     resumeFlag: '--conversation' // agy: resume a previous conversation by ID
@@ -159,8 +178,8 @@ export function isHiveAwareProvider(provider: AgentProvider | undefined): boolea
 
 /** Whether the router may deliver inbox mail to this provider (else bounce to
  *  the god). True for any provider that can actually drain its inbox — Claude
- *  (Stop hook), Antigravity (agy-hook Stop→drain bridge) and Codex (renderer
- *  idle inbox-wake nudge); false for hookless custom commands. */
+ *  (Stop hook), Antigravity and Codex (their `hookBridge` Stop→drain); false for
+ *  hookless custom commands. */
 export function canReceiveInbox(provider: AgentProvider | undefined): boolean {
   return providerPreset(provider ?? 'claude').canReceiveInbox;
 }
