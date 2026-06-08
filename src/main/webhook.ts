@@ -29,7 +29,11 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import { tunnelmole } from 'tunnelmole';
+// NOTE: `tunnelmole` is an ESM-only package. The Electron main process is bundled
+// as CommonJS, so a static `import` gets externalized into `require('tunnelmole')`
+// and throws ERR_REQUIRE_ESM at load. It is imported dynamically inside
+// `openTunnel()` instead — Rollup preserves dynamic import() in CJS output, which
+// can load ESM. Do not hoist this back to a top-level import.
 
 /** The validated body of an accepted POST — just the work to do. The secret has
  *  already been verified and is intentionally NOT part of this shape, so it can
@@ -142,8 +146,10 @@ export class WebhookServer {
     });
   }
 
-  private openTunnel(): Promise<string> {
+  private async openTunnel(): Promise<string> {
     // TODO: optional persistent domain — pass `domain` here when config carries one.
+    // Dynamic import keeps the ESM-only `tunnelmole` out of the CJS require graph.
+    const { tunnelmole } = await import('tunnelmole');
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timed out')), TUNNEL_START_TIMEOUT_MS);
       tunnelmole({ port: this.port })

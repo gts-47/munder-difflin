@@ -591,6 +591,16 @@ function persistSlackDoneNotified(set: Set<string>): void {
   catch (e) { console.error('[slack] could not persist done-notify ledger:', e); }
 }
 
+/** Slack `chat.postMessage` errors that are permanent for this config — retrying
+ *  can never make them succeed, so a failed post with one of these is recorded
+ *  (not retried) to avoid flooding the log every 5s. Anything else is treated as
+ *  transient and left to retry. */
+const TERMINAL_SLACK_ERRORS = new Set<string>([
+  'missing_scope', 'invalid_auth', 'not_authed', 'account_inactive',
+  'token_revoked', 'token_expired', 'no_permission', 'channel_not_found',
+  'not_in_channel', 'is_archived', 'restricted_action', 'org_login_required',
+]);
+
 /** The single in-thread summary for a finished task. Sourced from the task's
  *  result/description (falling back to the title), trimmed Slack-friendly. */
 function slackDoneSummary(task: HiveTask): string {
@@ -636,10 +646,18 @@ async function pollSlackDoneTasks(): Promise<void> {
       if (res.ok) {
         notified.add(t.id);
         persistSlackDoneNotified(notified); // mark-on-success → exactly one delivered reply
+      } else if (res.error && TERMINAL_SLACK_ERRORS.has(res.error)) {
+        // A permanent config/auth error (e.g. the bot token lacks `chat:write`)
+        // will NEVER succeed — record the id so we stop hammering every tick, and
+        // log the reason once. Never log the token or message body.
+        notified.add(t.id);
+        persistSlackDoneNotified(notified);
+        console.error('[slack] done-summary post for task', t.id,
+          '— giving up (terminal error:', res.error + '). Fix the Slack bot scope/permissions; later tasks post once resolved.');
       } else {
-        // Genuinely undelivered → leave unmarked so a later tick retries. Log
-        // the id + error only; never the token or message body.
-        console.error('[slack] done-summary post failed for task', t.id, '-', res.error);
+        // Transient (network / rate-limit / unknown) → leave unmarked so a later
+        // tick retries. Log the id + error only; never the token or message body.
+        console.error('[slack] done-summary post failed for task', t.id, '-', res.error, '(will retry)');
       }
     }
   } finally {
