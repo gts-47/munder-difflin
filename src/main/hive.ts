@@ -19,7 +19,7 @@
  */
 import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
-  readdirSync, statSync, rmSync, appendFileSync
+  readdirSync, statSync, rmSync, appendFileSync, symlinkSync, copyFileSync
 } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { homedir } from 'node:os';
@@ -322,12 +322,13 @@ export class HiveManager {
     const claudeProvider = isClaudeProvider(meta.provider ?? 'claude');
 
     // Non-hive-aware providers (Antigravity's `agy`, OpenAI's `codex`) don't
-    // understand Claude Code's flags or hook protocol — no telemetry, no
-    // `--settings` hooks. But they DO take an INITIAL prompt to orient the
-    // session, so we still inject the same hive identity+protocol as the first
-    // turn — the closest thing to `--append-system-prompt` these CLIs offer
-    // (after the first turn the session continues normally). This is what makes
-    // a Gemini/Codex worker hive-aware without Claude installed at all.
+    // understand Claude Code's flags (no `--append-system-prompt`, no telemetry,
+    // no `--settings`). Instead: (1) the hive identity+protocol rides in as the
+    // session's INITIAL prompt — the closest thing to `--append-system-prompt`
+    // these CLIs offer (after the first turn the session continues normally); and
+    // (2) lifecycle hooks are wired via the preset's `hookBridge` below. Together
+    // that makes a Gemini/Codex worker a full hive citizen — live status +
+    // Stop→inbox-drain — without Claude installed at all.
     //
     // How the prompt rides in differs by CLI:
     //  - agy takes it under a flag (`agy -i "<prompt>"`) → push [flag, prompt].
@@ -338,25 +339,39 @@ export class HiveManager {
       const preset = providerPreset(meta.provider ?? 'claude');
       const flag = preset.initialPromptFlag;
       const prompt = this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false);
-      // Only agy exposes a Claude-compatible lifecycle-hook surface we can bridge
-      // (PreToolUse/PostToolUse/Stop/…). Install the agy-hook shim so a Gemini
-      // worker gets the SAME live status + inbox-drain Claude does — on the
-      // subscription, no SDK/API key. Codex has NO such hooks and cannot reuse the
-      // bridge, so it is NOT installed for codex; codex relies on the renderer's
-      // idle inbox-wake nudge to drain its inbox (see useHive.ts) and on its outbox
-      // being drained provider-agnostically by the router.
-      if (meta.provider === 'antigravity') {
+      // Both agy and codex expose a Claude-style lifecycle-hook surface, so each
+      // gets the SAME live status + Stop→inbox-drain Claude does — selected by the
+      // preset's `hookBridge`. agy needs a translating shim (its hook stdin/stdout
+      // shape differs from Claude's); codex reuses the Claude `cth-hook` shim
+      // verbatim (its hook payload + response contract are already Claude-shaped)
+      // and is isolated to a per-agent CODEX_HOME so the user's global ~/.codex is
+      // never mutated. Both share the HIVE_SOCK wiring below.
+      const preArgs: string[] = [];
+      const bridge = preset.hookBridge;
+      if (bridge) {
         const sock = this.sockPath();
         if (sock) {
           env.HIVE_SOCK = sock;
-          try { this.installAgyHooks(); } catch (e) { console.error('[hive] installAgyHooks failed:', e); }
+          try {
+            if (bridge === 'agy') this.installAgyHooks();
+            else if (bridge === 'codex') {
+              env.CODEX_HOME = this.installCodexHooks(dir);
+              // Codex refuses to run hooks from a config dir without persisted
+              // "hook trust" (normally an interactive gate). Our hooks.json is
+              // hive-authored inside an isolated CODEX_HOME, so we bypass that gate
+              // for this automated spawn — the flag's documented use ("automation
+              // that already vets hook sources"). Without it the hooks silently
+              // never fire. Must precede the positional prompt.
+              preArgs.push('--dangerously-bypass-hook-trust');
+            }
+          } catch (e) { console.error(`[hive] install ${bridge} hooks failed:`, e); }
         }
       }
       // Inject the protocol text whichever way the CLI accepts it. If a provider
       // somehow exposes neither a flag nor a positional prompt, spawn bare.
-      if (flag) return { args: [flag, prompt], env };
+      if (flag) return { args: [...preArgs, flag, prompt], env };
       // Positional initial prompt (codex). Append as a trailing argv element.
-      return { args: [prompt], env };
+      return { args: [...preArgs, prompt], env };
     }
 
     // Stage 7A — first-party Claude Code telemetry → the embedded loopback OTLP
@@ -610,8 +625,8 @@ export class HiveManager {
       // assistant, any archived agent (closed tab), and providers that can't
       // drain an inbox (hookless custom commands) so mail never piles into a dead
       // inbox no one reads. Claude, Codex AND Antigravity workers ARE included —
-      // each can drain its inbox: Claude via its Stop hook, Antigravity via the
-      // agy-hook Stop→drain bridge, Codex via the renderer's idle inbox-wake nudge.
+      // each can drain its inbox on Stop: Claude via its native Stop hook, and
+      // Antigravity/Codex via their `hookBridge` Stop→drain (agy-hook / codex-hook).
       ? Object.keys(reg.agents).filter((a) =>
           a !== msg.from
           && !reg.agents[a]?.isAssistant
@@ -634,10 +649,10 @@ export class HiveManager {
         continue;
       }
       // A provider that can't drain its own inbox (a hookless custom command)
-      // would let direct mail rot unread. Claude (Stop hook), Antigravity
-      // (agy-hook Stop→drain bridge) and Codex (renderer idle inbox-wake nudge)
-      // all drain their inbox, so they receive directly into their inbox/. For a
-      // provider that can't, try a terminal work-order handoff to its REPL (#53);
+      // would let direct mail rot unread. Claude (native Stop hook) and
+      // Antigravity/Codex (their `hookBridge` Stop→drain) all drain their inbox,
+      // so they receive directly into their inbox/. For a provider that can't, try
+      // a terminal work-order handoff to its REPL (#53);
       // if the renderer is unavailable, bounce to god to relay. God is exempt
       // (the bounce target).
       if (t !== godId && !canReceiveInbox(reg.agents[t]?.provider)) {
@@ -832,6 +847,61 @@ export class HiveManager {
         writeFileSync(p, JSON.stringify(existing, null, 2), 'utf8');
       } catch { /* best-effort per file */ }
     }
+  }
+
+  /** Codex lifecycle-hook bridge → full hive parity for a `codex` worker (live
+   *  status + Stop→inbox-drain), the codex counterpart of installAgyHooks().
+   *
+   *  Codex's hook contract is already Claude-shaped: snake_case stdin
+   *  (hook_event_name/tool_name/tool_input/session_id/cwd) and a matching response
+   *  contract, where `Stop` honoring {decision:'block',reason} means "continue,
+   *  using reason as the next prompt" — exactly what drainForStop() returns. So we
+   *  reuse the Claude `cth-hook` shim VERBATIM (no translator, unlike agy) and let
+   *  HookServer handle everything unchanged.
+   *
+   *  ISOLATION: rather than mutate the user's global ~/.codex (which also holds
+   *  their login), we point this worker at a PER-AGENT CODEX_HOME (`<dir>/.codex`,
+   *  alongside Claude's settings.json) holding only our hooks.json — so the hooks
+   *  fire ONLY for hive workers and a personal `codex` run is untouched. The user's
+   *  ~/.codex/auth.json + config.toml are linked in (read-only) so login + model/
+   *  provider/trust settings still apply. Best-effort + idempotent on respawn.
+   *  Returns the CODEX_HOME path for the caller to put in the worker's env. */
+  private installCodexHooks(dir: string): string {
+    const home = join(dir, '.codex');
+    try {
+      mkdirSync(home, { recursive: true });
+      const shim = this.shimPath();
+      if (shim) {
+        // No matcher = match all tools/events; every event routes to the same
+        // cth-hook shim (it reads the event from the payload's hook_event_name).
+        const entry = { hooks: [{ type: 'command', command: `node ${shim}`, timeout: 0 }] };
+        const hooks = {
+          PreToolUse: [entry],
+          PostToolUse: [entry],
+          Stop: [entry],
+          SubagentStop: [entry],
+          SessionStart: [entry],
+          UserPromptSubmit: [entry],
+          PreCompact: [entry],
+          PostCompact: [entry]
+        };
+        writeFileSync(join(home, 'hooks.json'), JSON.stringify({ hooks }, null, 2), 'utf8');
+      }
+      // Carry the user's Codex login + config into the relocated home so the
+      // worker authenticates and respects the user's model/provider/trust config.
+      // Symlink (read-only intent); fall back to a copy where symlinks need
+      // privilege (Windows). Skip if already present (idempotent).
+      const userHome = join(homedir(), '.codex');
+      for (const f of ['auth.json', 'config.toml']) {
+        const src = join(userHome, f);
+        const dest = join(home, f);
+        if (existsSync(src) && !existsSync(dest)) {
+          try { symlinkSync(src, dest); }
+          catch { try { copyFileSync(src, dest); } catch { /* best-effort */ } }
+        }
+      }
+    } catch (e) { console.error('[hive] installCodexHooks failed:', e); }
+    return home;
   }
 
   /** Write the live fleet snapshot Michael reads (`fleet.json`, gitignored).
