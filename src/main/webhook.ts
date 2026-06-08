@@ -2,7 +2,7 @@
  * WebhookServer — a generic, secret-gated inbound HTTP API that turns an external
  * POST into hive work and lets the caller poll that work's status by a token.
  *
- * Modeled on `SlackWebhookServer` (same zero-SDK `node:http` + `localtunnel`
+ * Modeled on `SlackWebhookServer` (same zero-SDK `node:http` + `tunnelmole`
  * approach) but for arbitrary callers rather than Slack's Events API:
  *   - POST <endpoint>  + `x-md-webhook-secret: <secret>` + JSON `{ message, title? }`
  *       → routes the message to god/Michael, creates a stamped kanban card, and
@@ -29,10 +29,7 @@
  */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
-import localtunnel from 'localtunnel';
-
-/** The live tunnel handle returned by localtunnel (has `url` + `close()`). */
-type Tunnel = Awaited<ReturnType<typeof localtunnel>>;
+import { tunnelmole } from 'tunnelmole';
 
 /** The validated body of an accepted POST — just the work to do. The secret has
  *  already been verified and is intentionally NOT part of this shape, so it can
@@ -80,13 +77,13 @@ const RATE_WINDOW_MS = 60_000;
 
 export class WebhookServer {
   private server: Server | null = null;
-  private tunnel: Tunnel | null = null;
+  private tunnelUrl: string | null = null;
   private readonly port: number;
   private readonly secret: string;
   private readonly onMessage: (msg: WebhookInbound) => { token: string; taskId: string } | null;
   private readonly lookupStatus: (token: string) => WebhookTaskStatus | null;
   // Fixed-window rate limiter (global; the remote IP is the tunnel's, so per-IP
-  // would be meaningless behind loca.lt).
+  // would be meaningless behind tunnelmole).
   private windowStart = 0;
   private windowCount = 0;
 
@@ -113,19 +110,21 @@ export class WebhookServer {
       return { ok: false, error: `failed to bind port ${this.port}: ${errMsg(e)}` };
     }
     try {
-      const tunnel = await this.openTunnel();
-      this.tunnel = tunnel;
-      tunnel.on('error', () => { /* tunnel hiccup — ignore, server still listening */ });
-      return { ok: true, url: tunnel.url };
+      const url = await this.openTunnel();
+      if (!url) throw new Error('tunnelmole returned empty URL');
+      this.tunnelUrl = url;
+      // tunnelmole runs in the background; there is no close handle to wire here.
+      return { ok: true, url };
     } catch (e) {
-      return { ok: true, error: `tunnel unavailable: ${errMsg(e)}` };
+      // Surface the tunnel failure rather than silently returning ok:true with no url.
+      return { ok: false, error: `tunnel unavailable: ${errMsg(e)}` };
     }
   }
 
-  /** Close the tunnel and HTTP server. Idempotent and best-effort. */
+  /** Close the HTTP server. Idempotent and best-effort.
+   *  Note: tunnelmole has no documented close handle; teardown is best-effort. */
   stop(): void {
-    try { this.tunnel?.close(); } catch { /* noop */ }
-    this.tunnel = null;
+    this.tunnelUrl = null;
     try { this.server?.close(); } catch { /* noop */ }
     this.server = null;
   }
@@ -143,11 +142,12 @@ export class WebhookServer {
     });
   }
 
-  private openTunnel(): Promise<Tunnel> {
-    return new Promise<Tunnel>((resolve, reject) => {
+  private openTunnel(): Promise<string> {
+    // TODO: optional persistent domain — pass `domain` here when config carries one.
+    return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timed out')), TUNNEL_START_TIMEOUT_MS);
-      Promise.resolve(localtunnel({ port: this.port }))
-        .then((t) => { clearTimeout(timer); resolve(t); })
+      tunnelmole({ port: this.port })
+        .then((url) => { clearTimeout(timer); resolve(url); })
         .catch((e) => { clearTimeout(timer); reject(e); });
     });
   }
