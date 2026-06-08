@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Launching Munder Difflin v0.2.3 — Munder Difflin Blog</title>
+<meta name="description" content="Munder Difflin v0.2.3 makes the floor multi-provider: Claude Code, Antigravity (Gemini), and OpenAI Codex can now work as first-class hive participants." />
+<link rel="canonical" href="https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/" />
+
+<link rel="icon" type="image/png" href="https://munderdiffl.in/logo.png" />
+<link rel="apple-touch-icon" href="https://munderdiffl.in/logo.png" />
+<meta name="theme-color" content="#F5F2E8" />
+
+<!-- Open Graph -->
+<meta property="og:site_name" content="Munder Difflin Blog" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Launching Munder Difflin v0.2.3 — Munder Difflin Blog" />
+<meta property="og:description" content="Munder Difflin v0.2.3 makes the floor multi-provider: Claude Code, Antigravity (Gemini), and OpenAI Codex can now work as first-class hive participants." />
+<meta property="og:url" content="https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/" />
+<meta property="og:image" content="https://munderdiffl.in/media/og.png" />
+<meta property="og:locale" content="en_US" />
+<meta property="article:published_time" content="2026-06-09T00:00:00.000Z" />
+<meta property="article:author" content="Chaitanya Giri" />
+<meta property="article:tag" content="Story" />
+<meta property="article:tag" content="Release" />
+<meta property="article:tag" content="Multi-Agent" />
+<meta property="article:tag" content="Claude Code" />
+<meta property="article:tag" content="Codex" />
+<meta property="article:tag" content="Open Source" />
+
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Launching Munder Difflin v0.2.3 — Munder Difflin Blog" />
+<meta name="twitter:description" content="Munder Difflin v0.2.3 makes the floor multi-provider: Claude Code, Antigravity (Gemini), and OpenAI Codex can now work as first-class hive participants." />
+<meta name="twitter:image" content="https://munderdiffl.in/media/og.png" />
+
+<link rel="alternate" type="application/atom+xml" title="Munder Difflin Blog" href="https://munderdiffl.in/blog/feed.xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/blog/assets/blog.css" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Launching Munder Difflin v0.2.3",
+  "description": "Munder Difflin v0.2.3 makes the floor multi-provider: Claude Code, Antigravity (Gemini), and OpenAI Codex can now work as first-class hive participants.",
+  "image": ["https://munderdiffl.in/media/og.png"],
+  "datePublished": "2026-06-09T00:00:00.000Z",
+  "dateModified": "2026-06-09T00:00:00.000Z",
+  "author": { "@type": "Person", "name": "Chaitanya Giri" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Munder Difflin",
+    "logo": { "@type": "ImageObject", "url": "https://munderdiffl.in/logo.png" }
+  },
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/" },
+  "keywords": "munder difflin v0.2.3, munder difflin release, multi-provider agents, antigravity gemini agents, codex hive agents",
+  "articleSection": "Story",
+  "inLanguage": "en-US",
+  "url": "https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://munderdiffl.in/" },
+    { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://munderdiffl.in/blog/" },
+    { "@type": "ListItem", "position": 3, "name": "Launching Munder Difflin v0.2.3", "item": "https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/" }
+  ]
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What's new in Munder Difflin v0.2.3?", "acceptedAnswer": { "@type": "Answer", "text": "v0.2.3 is the multi-provider release. The floor is no longer Claude-only: Claude Code, Antigravity (Gemini via agy), and OpenAI Codex can work as hive participants. It also moves recurring missions into a dedicated Schedules tab, adds terminal work-order handoff for hookless providers, and replaces localtunnel with tunnelmole for Slack and webhook ingress." } },
+    { "@type": "Question", "name": "Can Antigravity agents participate in the hive?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. Antigravity workers run through the agy CLI. Because agy does not expose Claude-style append-system-prompt or settings hooks, Munder Difflin injects the hive identity and protocol as the initial prompt and uses a native agy-hook bridge to normalize lifecycle events into the existing hook pipeline." } },
+    { "@type": "Question", "name": "Can Codex agents read inbox mail and message back?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. In v0.2.3, Codex receives the hive protocol as its initial prompt, outbox messages are drained by the provider-agnostic router, and inbox mail reaches Codex through the renderer idle inbox-wake nudge." } },
+    { "@type": "Question", "name": "Why did Slack and webhook ingress move to tunnelmole?", "acceptedAnswer": { "@type": "Answer", "text": "The previous localtunnel/loca.lt ingress started serving a browser interstitial that broke Slack URL verification and saved webhook URLs. v0.2.3 uses tunnelmole, where POST requests pass straight through, and failed tunnel startup now surfaces as a real error." } }
+    
+  ]
+}
+</script>
+
+
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<nav id="nav">
+  <a class="brand" href="/blog/" aria-label="Munder Difflin Blog home">
+    <span class="brand-mark">MD</span>
+    <span class="brand-word">MUNDER DIFFLIN<span class="sep">/</span><span class="blog">BLOG</span></span>
+  </a>
+  <span class="spacer"></span>
+  <div class="links">
+    <a href="/blog/">Latest</a>
+    <a href="/blog/topics/">Topics</a>
+    <a href="/blog/about/">About</a>
+    <a href="https://munderdiffl.in">↗ Product</a>
+  </div>
+  <div class="nav-actions">
+    <a class="btn sm" href="https://munderdiffl.in/blog/feed.xml" aria-label="RSS feed">⤵ RSS</a>
+    <a class="btn sm primary" href="https://munderdiffl.in/#install">⤓ Download</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<article>
+  <header class="post-head wrap">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/blog/">Blog</a>
+      <span>/</span>
+      <a href="/blog/topics/story/">Story</a>
+    </nav>
+    <h1>Launching Munder Difflin v0.2.3</h1>
+    <p class="dek">Munder Difflin v0.2.3 makes the floor multi-provider: Claude Code, Antigravity (Gemini), and OpenAI Codex can now work as first-class hive participants.</p>
+    <div class="byline">
+      <span class="av" aria-hidden="true">CG</span>
+      <strong>Chaitanya Giri</strong>
+      <span class="dot" aria-hidden="true">·</span>
+      <time datetime="2026-06-09">Jun 9, 2026</time>
+      <span class="dot" aria-hidden="true">·</span>
+      <span>4 min read</span>
+      <span class="tag kind">Story</span>
+    </div>
+  </header>
+
+  <div class="post-wrap wrap">
+    <div class="prose">
+      <div class="callout tldr"><span class="ic">TL;DR</span><p><strong>Munder Difflin v0.2.3</strong> makes the
+floor <strong>multi-provider</strong>. Claude Code is still first-class, and now <strong>Antigravity</strong>
+(Gemini through <code>agy</code>) and <strong>OpenAI Codex</strong> can join the same hive as working agents.
+Schedules get their own Command-Center tab, hookless providers receive terminal <strong>WORK ORDER FROM HIVE</strong>
+handoffs, and Slack/webhook ingress moves from localtunnel to <strong>tunnelmole</strong>.</p></div>
+<p>Munder Difflin started as a local harness for Claude Code agents. The core idea was not “run one terminal with
+a nicer frame.” It was: give terminal agents a shared memory, mailboxes, a router, and one GOD orchestrator you
+can talk to while the team keeps working.</p>
+<p>In v0.2.3, that idea stops being Claude-only.</p>
+<p>The floor is now <strong>multi-provider</strong>. Claude Code, Antigravity, and Codex workers can sit in the same office,
+receive work from the same hive, and report back through the same coordination layer. The implementation details
+are different for each provider, because their CLIs expose different control surfaces. The user-facing result is
+the important part: your agent team no longer has to be one model family wearing different names.</p>
+<h2 id="the-floor-is-multi-provider" tabindex="-1">The floor is multi-provider <a class="anchor" href="#the-floor-is-multi-provider" aria-hidden="true">#</a></h2>
+<p>The headline change is first-class <strong>Antigravity</strong> support. A worker can now run the Antigravity CLI (<code>agy</code>) as
+a full hive participant, backed by Gemini and your Antigravity subscription rather than a separate API key.</p>
+<p>Antigravity does not provide the same hooks Claude Code does. There is no Claude-style <code>--append-system-prompt</code>
+or <code>--settings</code> hook path to lean on. So v0.2.3 takes a provider-specific route:</p>
+<ul>
+<li>the agent’s hive identity and protocol are injected as the session’s initial prompt;</li>
+<li>a native <code>agy-hook</code> bridge normalizes Antigravity lifecycle events into the existing hook pipeline;</li>
+<li>the worker gets the same live status and inbox-drain behavior as a Claude worker.</li>
+</ul>
+<p>That means Antigravity can participate in the hive instead of living beside it as a generic terminal.</p>
+<h2 id="codex-can-message-back" tabindex="-1">Codex can message back <a class="anchor" href="#codex-can-message-back" aria-hidden="true">#</a></h2>
+<p>Codex support also crosses an important line in this release.</p>
+<p>Before v0.2.3, a Codex terminal could spawn, but it did not really know the hive protocol. It did not reliably
+read inbox mail or write outbox messages, which meant it was present on the floor without being a proper
+collaborator.</p>
+<p>Now Codex is treated as an inbox-capable provider:</p>
+<ul>
+<li>the hive protocol is injected as its initial positional prompt;</li>
+<li>its outbox is drained by the provider-agnostic router;</li>
+<li>inbox mail reaches it through the renderer’s idle inbox-wake nudge.</li>
+</ul>
+<p>The release notes describe this as “non-hive-aware-but-inbox-capable,” which is the useful distinction. Codex
+does not need Claude’s hook model to become useful in the office. It needs a reliable protocol handoff and a
+path for mail to reach the terminal when it is idle.</p>
+<h2 id="terminal-work-orders-for-hookless-providers" tabindex="-1">Terminal work orders for hookless providers <a class="anchor" href="#terminal-work-orders-for-hookless-providers" aria-hidden="true">#</a></h2>
+<p>Different CLIs expose different lifecycle hooks. v0.2.3 adds a practical fallback for providers that do not have
+an inbox-drain path: the hive can type a terminal work order directly into the session.</p>
+<p>When mail arrives for one of those agents, it receives a clear <code>WORK ORDER FROM HIVE</code> in its terminal. If the
+renderer is not available, Munder Difflin falls back to bouncing the message to the GOD agent instead of silently
+dropping it.</p>
+<p>This is not as elegant as a native hook. It is better: it is honest about the provider’s control surface and still
+keeps the agent in the team.</p>
+<h2 id="schedules-get-their-own-tab" tabindex="-1">Schedules get their own tab <a class="anchor" href="#schedules-get-their-own-tab" aria-hidden="true">#</a></h2>
+<p>Recurring missions have been part of the system for a while: you can ask the floor to run a task every hour,
+re-engage a quiet team, or keep a reviewer checking in. In v0.2.3, those missions move into a dedicated
+<strong>Schedules</strong> tab in the Command Center.</p>
+<p>That tab now owns recurring auto-dispatched missions and the adaptive heartbeat, instead of hiding them inside
+an inline section. The change is small in code surface and large in day-to-day use: schedules are no longer a
+secondary control. They are one of the main ways you run a persistent agent office.</p>
+<h2 id="slack-and-webhooks-move-to-tunnelmole" tabindex="-1">Slack and webhooks move to tunnelmole <a class="anchor" href="#slack-and-webhooks-move-to-tunnelmole" aria-hidden="true">#</a></h2>
+<p>The release also fixes a boring but important ingress problem.</p>
+<p>Slack and generic webhook ingress used <code>localtunnel</code> / <code>loca.lt</code>. That path became unreliable because the public
+tunnel now serves a browser interstitial. Browser interstitials are fatal for machine-to-machine POSTs: Slack’s
+<code>url_verification</code> request fails, and saved webhook URLs break even when the app thinks the tunnel started.</p>
+<p>v0.2.3 moves both <code>slack.ts</code> and <code>webhook.ts</code> to <strong>tunnelmole</strong>. POSTs pass straight through, and if the tunnel
+fails to start, the app surfaces a real error instead of pretending there is a usable public URL.</p>
+<h2 id="what-this-release-means" tabindex="-1">What this release means <a class="anchor" href="#what-this-release-means" aria-hidden="true">#</a></h2>
+<p>The v0.2.x line has been about making the floor durable enough to trust: observability, schedules, persistence,
+context gauges, circuit breakers, and polish. v0.2.3 widens the actual team.</p>
+<p>You can keep Claude Code as the orchestrator and add an Antigravity worker. You can bring Codex into the same
+mailbox and memory loop. You can schedule work that lands in whichever provider makes sense. And when an outside
+system sends work into the office through Slack or a webhook, the ingress path is less fragile.</p>
+<p>The important part is not that every provider behaves identically. They do not. The important part is that the
+hive now has provider-specific handoffs that make each one useful without pretending their CLIs are the same.</p>
+<h2 id="get-v023" tabindex="-1">Get v0.2.3 <a class="anchor" href="#get-v023" aria-hidden="true">#</a></h2>
+<p>Munder Difflin is free, open source, and local-first on macOS, Windows, and Linux. Download v0.2.3 from the
+<a href="https://github.com/chaitanyagiri/munder-difflin/releases/latest">releases page</a>, install the CLIs you want on
+your <code>PATH</code> (<code>claude</code>, <code>agy</code>, and/or <code>codex</code>), and add them to the floor as workers.</p>
+<p>Full release notes are in the <a href="https://github.com/chaitanyagiri/munder-difflin/blob/main/CHANGELOG.md">CHANGELOG</a>.</p>
+
+
+      
+      <section class="faq" aria-label="Frequently asked questions">
+        <h2 id="faq">FAQ</h2>
+        
+        <div class="qa">
+          <p class="q">What&#39;s new in Munder Difflin v0.2.3?</p>
+          <p class="a">v0.2.3 is the multi-provider release. The floor is no longer Claude-only: Claude Code, Antigravity (Gemini via agy), and OpenAI Codex can work as hive participants. It also moves recurring missions into a dedicated Schedules tab, adds terminal work-order handoff for hookless providers, and replaces localtunnel with tunnelmole for Slack and webhook ingress.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Can Antigravity agents participate in the hive?</p>
+          <p class="a">Yes. Antigravity workers run through the agy CLI. Because agy does not expose Claude-style append-system-prompt or settings hooks, Munder Difflin injects the hive identity and protocol as the initial prompt and uses a native agy-hook bridge to normalize lifecycle events into the existing hook pipeline.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Can Codex agents read inbox mail and message back?</p>
+          <p class="a">Yes. In v0.2.3, Codex receives the hive protocol as its initial prompt, outbox messages are drained by the provider-agnostic router, and inbox mail reaches Codex through the renderer idle inbox-wake nudge.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Why did Slack and webhook ingress move to tunnelmole?</p>
+          <p class="a">The previous localtunnel/loca.lt ingress started serving a browser interstitial that broke Slack URL verification and saved webhook URLs. v0.2.3 uses tunnelmole, where POST requests pass straight through, and failed tunnel startup now surfaces as a real error.</p>
+        </div>
+        
+      </section>
+      
+
+      
+      <hr />
+      <div class="share">
+        <span class="lbl">Tags</span>
+        <a class="tag" href="/blog/tags/story/">Story</a><a class="tag" href="/blog/tags/release/">Release</a><a class="tag" href="/blog/tags/multi-agent/">Multi-Agent</a><a class="tag" href="/blog/tags/claude-code/">Claude Code</a><a class="tag" href="/blog/tags/codex/">Codex</a><a class="tag" href="/blog/tags/open-source/">Open Source</a>
+      </div>
+      
+    </div>
+
+    
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="tt">On this page</div>
+      <ol>
+        <li class="lvl-2"><a href="#the-floor-is-multi-provider">The floor is multi-provider</a></li><li class="lvl-2"><a href="#codex-can-message-back">Codex can message back</a></li><li class="lvl-2"><a href="#terminal-work-orders-for-hookless-providers">Terminal work orders for hookless providers</a></li><li class="lvl-2"><a href="#schedules-get-their-own-tab">Schedules get their own tab</a></li><li class="lvl-2"><a href="#slack-and-webhooks-move-to-tunnelmole">Slack and webhooks move to tunnelmole</a></li><li class="lvl-2"><a href="#what-this-release-means">What this release means</a></li><li class="lvl-2"><a href="#get-v023">Get v0.2.3</a></li>
+      </ol>
+    </aside>
+    
+  </div>
+
+  <footer class="post-foot wrap"><div class="prevnext">
+      <a class="pn prev" href="/blog/launching-munder-difflin-v0-2-0/"><span class="k">← Older</span><span class="t">Launching Munder Difflin v0.2.0</span></a>
+      <span></span>
+    </div>
+    <section class="related">
+      <h2>Related in Story</h2>
+      <div class="post-grid">
+        <article class="card">
+  <a class="thumb t-story" href="/blog/launching-munder-difflin-v0-2-0/" aria-hidden="true" tabindex="-1">
+    <span>STORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-07">Jun 7, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>7 min</span>
+    </div>
+    <h3><a href="/blog/launching-munder-difflin-v0-2-0/">Launching Munder Difflin v0.2.0</a></h3>
+    <p class="dek">Munder Difflin v0.2.0 is here: a Command Center overhaul, per-agent token budgets, live OpenTelemetry observability, a circuit breaker, durable SQLite persistence, and a big round of community fixes.</p>
+    <div class="foot">
+      <span class="tag kind">Story</span>
+      <a class="more" href="/blog/launching-munder-difflin-v0-2-0/" aria-label="Read: Launching Munder Difflin v0.2.0">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
+  <a class="thumb t-story" href="/blog/one-prompt-automated-pr-review/" aria-hidden="true" tabindex="-1">
+    <span>STORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-07">Jun 7, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>6 min</span>
+    </div>
+    <h3><a href="/blog/one-prompt-automated-pr-review/">One Prompt, Five PR Reviews, and an Hourly Automation — A Dogfooding Story</a></h3>
+    <p class="dek">How a single prompt to the Munder Difflin god agent reviewed all open PRs and set up a recurring hourly PR reviewer — while the repo was blowing up with 400+ stars.</p>
+    <div class="foot">
+      <span class="tag kind">Story</span>
+      <a class="more" href="/blog/one-prompt-automated-pr-review/" aria-label="Read: One Prompt, Five PR Reviews, and an Hourly Automation — A Dogfooding Story">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
+  <a class="thumb t-story" href="/blog/the-office-parody-behind-munder-difflin/" aria-hidden="true" tabindex="-1">
+    <span>STORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>4 min</span>
+    </div>
+    <h3><a href="/blog/the-office-parody-behind-munder-difflin/">The Office Parody Behind Munder Difflin (and Why It Helps)</a></h3>
+    <p class="dek">Why Munder Difflin is a loving parody of The Office — and how the office metaphor makes a hive of AI agents genuinely easier to understand and trust.</p>
+    <div class="foot">
+      <span class="tag kind">Story</span>
+      <a class="more" href="/blog/the-office-parody-behind-munder-difflin/" aria-label="Read: The Office Parody Behind Munder Difflin (and Why It Helps)">Read →</a>
+    </div>
+  </div>
+</article>
+
+      </div>
+    </section>
+    
+  </footer>
+</article>
+
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <a class="foot-brand brand" href="/blog/">
+        <span class="brand-mark">MD</span>
+        <span class="brand-word">MUNDER DIFFLIN<span class="sep">/</span><span class="blog">BLOG</span></span>
+      </a>
+      <div class="foot-links">
+        <a href="/blog/">Latest</a>
+        <a href="/blog/topics/">Topics</a>
+        <a href="/blog/about/">About</a>
+        <a href="https://munderdiffl.in/blog/feed.xml">RSS</a>
+        <a href="https://github.com/chaitanyagiri/munder-difflin">GitHub</a>
+        <a href="https://munderdiffl.in">munderdiffl.in ↗</a>
+      </div>
+    </div>
+    <div class="foot-meta">
+      © 2026 Munder Difflin · Local-first · MIT-licensed ·
+      Built on <a href="https://munderdiffl.in">Electron, React, Pixi.js, xterm.js &amp; node-pty</a>.
+      Run an office of agents while you sleep.
+    </div>
+  </div>
+</footer>
+
+<script>
+  // sticky-nav border on scroll
+  (function () {
+    var nav = document.getElementById('nav');
+    if (!nav) return;
+    var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
+    onScroll(); window.addEventListener('scroll', onScroll, { passive: true });
+  })();
+</script>
+
+</body>
+</html>
