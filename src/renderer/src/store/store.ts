@@ -49,18 +49,23 @@ export interface Agent {
   blockReason?: BlockReason;
   /** present iff this agent has a real PTY in the main process */
   ptyId?: string;
-  /** the command being run in the PTY (e.g. 'claude') */
+  /** the command being run in the PTY (e.g. 'claude' or 'agy') */
   command?: string;
-  /** which agent CLI preset owns this PTY recipe */
+  /** which agent CLI preset owns this PTY recipe; drives the model picker +
+   *  spawn flags. Defaults to 'claude' when unset (legacy agents / inferred
+   *  from command). */
   provider?: AgentProvider;
-  /** the model this agent runs on (e.g. 'claude-sonnet-4-6[1m]'); drives the
-   *  model selector + the --model arg used when (re)spawning the agent */
+  /** the model this agent runs on (e.g. 'claude-sonnet-4-6[1m]' or 'gemini-3-pro');
+   *  drives the model selector + the --model arg used when (re)spawning the agent */
   model?: string;
   /** the last prompt the user submitted to this agent in Claude Code —
    *  shown on the floor as a card above the seated avatar */
   lastPrompt?: string;
   /** the orchestrator ("god") agent — seated in Michael's room, runs the floor */
   isGod?: boolean;
+  /** Michael's prep assistant — send-only; enriches prompts and forwards them to
+   *  the god. Excluded from broadcast fan-out and from the restorable-dead sweep. */
+  isAssistant?: boolean;
   /** When git isolation is enabled, the dedicated worktree path the agent runs
    *  in (its own `agent/<id>` branch); undefined for shared-cwd agents. */
   worktreePath?: string;
@@ -488,10 +493,10 @@ export const useStore = create<State>((set) => ({
       const agents = s.agents.filter((a) => !a.ptyId || live.has(a.ptyId));
       if (agents.length === s.agents.length) return s;
       // Workers whose terminal died with the previous session become restorable
-      // (full spawn recipe retained) instead of silently vanishing. God is excluded
-      // — auto-respawns at boot.
+      // (full spawn recipe retained) instead of silently vanishing. God and the
+      // prep assistant are excluded — they auto-respawn at boot.
       const dead = s.agents.filter(
-        (a) => a.ptyId && !live.has(a.ptyId) && !a.isGod
+        (a) => a.ptyId && !live.has(a.ptyId) && !a.isGod && !a.isAssistant
       );
       const restorableAgents = [
         ...s.restorableAgents.filter((r) => !dead.some((d) => d.id === r.id)),

@@ -7,11 +7,14 @@ declare const __APP_VERSION__: string;
 export interface HiveAgentMeta {
   id: string;
   name: string;
+  /** Which CLI this agent runs on (claude/codex/antigravity/custom); defaults claude. */
   provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
   cwd: string;
   isGod?: boolean;
+  /** Michael's prep assistant — send-only; enriches prompts and forwards them. */
+  isAssistant?: boolean;
 }
 
 export interface HiveMessage {
@@ -84,6 +87,7 @@ export interface SpawnPtyOptions {
   id: string;
   cwd: string;
   command: string;
+  /** Which CLI to spawn; usually inferred from `command` in the main process. */
   provider?: AgentProvider;
   args?: string[];
   cols?: number;
@@ -92,6 +96,9 @@ export interface SpawnPtyOptions {
   hive?: HiveAgentMeta;
   /** When true (and cwd is a git repo), spawn the agent in its own git worktree. */
   isolate?: boolean;
+  /** When true, continue the agent's prior CLI session if one was recorded
+   *  (provider-aware: Claude `--resume`, Antigravity `--conversation`). */
+  resume?: boolean;
 }
 
 export interface PtyExit { exitCode: number; signal?: number | undefined }

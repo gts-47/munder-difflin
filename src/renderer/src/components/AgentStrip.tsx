@@ -3,7 +3,7 @@ import { AgentCard } from './AgentCard';
 import { PixelButton } from './PixelButton';
 import { Icon } from './Icon';
 import { useStore, type Agent } from '@/store/store';
-import { buildSpawnCommand, inferAgentProvider, type HarnessConfig } from '@/store/config';
+import { buildSpawnCommand, inferAgentProvider, tokenizeCommand, type HarnessConfig } from '@/store/config';
 
 export interface AgentStripProps {
   /** Needed to rebuild a spawn command when a restorable agent predates the
@@ -54,7 +54,7 @@ export function AgentStrip({ config }: AgentStripProps) {
         const provider = inferAgentProvider(a.command, a.provider);
         const command = (a.command ?? '').trim() || (config ? buildSpawnCommand(config, a.model, provider) : '');
         if (!command || !a.cwd) { useStore.getState().removeRestorableAgent(a.id); continue; }
-        const [exe, ...args] = command.split(/\s+/);
+        const [exe, ...args] = tokenizeCommand(command);
         const ptyId = a.ptyId ?? `pty-${a.id}`;
         const res = await window.cth.spawnPty({
           id: ptyId,
@@ -64,6 +64,10 @@ export function AgentStrip({ config }: AgentStripProps) {
           args,
           cols: 100,
           rows: 30,
+          // Continue the worker's prior CLI session if one was recorded — the
+          // main process picks the provider's resume flag (Claude --resume,
+          // agy --conversation). No-op when there's no recorded session id.
+          resume: true,
           // Re-request isolation if the agent ran in its own worktree before —
           // the old worktree was torn down on exit, so a fresh one is created.
           isolate: !!a.worktreePath,

@@ -14,7 +14,7 @@ import { useFleetTelemetry } from '@/hooks/useTelemetry';
 import { COMMAND_GROUPS } from '@shared/claudeCommands';
 import { useStore, type Agent } from '@/store/store';
 import { usePtyParser } from '@/hooks/usePtyParser';
-import { buildSpawnCommand, AGENT_MODELS, inferAgentProvider, isClaudeProvider } from '@/store/config';
+import { buildSpawnCommand, modelsForProvider, tokenizeCommand, inferAgentProvider, isClaudeProvider } from '@/store/config';
 
 /** Michael's control surface. Shown instead of the plain terminal/files panel
  *  when the god agent is selected: terminal + queue, the floor roster (with
@@ -304,13 +304,18 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
       const cfg = await window.cth.getConfig();
       await window.cth.killPty(a.ptyId);
       disposeTerminal(a.ptyId);
+      // Respawn on the same CLI this agent already runs on (inferred from its
+      // command if not explicitly tagged) so an Antigravity/Codex worker stays
+      // on its own binary. tokenizeCommand keeps quoted model labels one arg.
       const provider = inferAgentProvider(a.command, a.provider);
       const command = buildSpawnCommand(cfg, model, provider);
-      const [exe, ...args] = command.trim().split(/\s+/);
+      const [exe, ...args] = tokenizeCommand(command.trim());
       const hive = a.isGod
-        ? { id: a.id, name: a.name, provider, cwd: a.cwd, isGod: true, role: 'orchestrator (god)' }
-        : { id: a.id, name: a.name, provider, cwd: a.cwd, role: a.description };
-      const res = await window.cth.spawnPty({ id: a.ptyId, cwd: a.cwd, command: exe, provider, args, cols: 100, rows: 30, hive });
+        ? { id: a.id, name: a.name, cwd: a.cwd, provider, isGod: true, role: 'orchestrator (god)' }
+        : a.isAssistant
+        ? { id: a.id, name: a.name, cwd: a.cwd, provider, isAssistant: true, role: "Michael's prep assistant" }
+        : { id: a.id, name: a.name, cwd: a.cwd, provider, role: a.description };
+      const res = await window.cth.spawnPty({ id: a.ptyId, cwd: a.cwd, command: exe, args, provider, cols: 100, rows: 30, hive });
       if (res.ok) updateAgent(a.id, { command: command.trim(), provider, model, status: 'idle', action: 'restarting…' });
     } catch { /* noop */ } finally {
       setRestarting(null);
@@ -532,12 +537,16 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                 disabled={restarting === a.id}
                 onChange={(v) => restartWithModel(a, v || undefined)}
               >
-                {AGENT_MODELS.map((m) => (
+                {modelsForProvider(inferAgentProvider(a.command, a.provider)).map((m) => (
                   <option key={m.label} value={m.id ?? ''}>{m.label}</option>
                 ))}
               </Select>
               <span style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>
-                {restarting === a.id ? 'restarting…' : 'model (restarts agent)'}
+                {restarting === a.id
+                  ? 'restarting…'
+                  : isClaudeProvider(inferAgentProvider(a.command, a.provider))
+                    ? 'model (restarts agent)'
+                    : `${inferAgentProvider(a.command, a.provider)} · model (restarts agent)`}
               </span>
             </div> : (
               <div style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>

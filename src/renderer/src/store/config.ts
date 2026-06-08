@@ -2,8 +2,7 @@
 // so we don't have to reach into the preload package to type-check.
 import {
   AGENT_PROVIDER_PRESETS,
-  autoModeFlagForProvider,
-  defaultCommandForProvider,
+  providerPreset,
   inferAgentProvider,
   isClaudeProvider,
   type AgentProvider
@@ -11,6 +10,7 @@ import {
 
 export {
   AGENT_PROVIDER_PRESETS,
+  providerPreset,
   inferAgentProvider,
   isClaudeProvider,
   type AgentProvider
@@ -90,18 +90,68 @@ export const AGENT_MODELS: ModelOption[] = [
   { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5' }
 ];
 
-/** Build the command line to feed into spawnPty, honoring autoMode and an
- *  optional per-agent model override (injected as `--model <model>`). */
+/** Models offered when an agent runs on the Antigravity CLI (`agy`). agy's
+ *  `--model` takes the DISPLAY-NAME LABEL exactly as `agy models` prints it
+ *  (verified: agy logs `Propagating selected model override … label="…"`), not a
+ *  slug — so these ids ARE the labels (spaces/parens included; buildSpawnCommand
+ *  quotes them and the command tokenizer keeps them whole). The command field
+ *  stays editable; `agy models` is the source of truth for the live list. */
+export const ANTIGRAVITY_MODELS: ModelOption[] = [
+  { id: undefined, label: 'default' },
+  { id: 'Gemini 3.1 Pro (High)', label: 'Gemini 3.1 Pro · High' },
+  { id: 'Gemini 3.1 Pro (Low)', label: 'Gemini 3.1 Pro · Low' },
+  { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash · High' },
+  { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash · Med' },
+  { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash · Low' },
+  { id: 'Claude Sonnet 4.6 (Thinking)', label: 'Claude Sonnet 4.6' },
+  { id: 'Claude Opus 4.6 (Thinking)', label: 'Claude Opus 4.6' },
+  { id: 'GPT-OSS 120B (Medium)', label: 'GPT-OSS 120B' }
+];
+
+/** Split a command string into argv, respecting double/single quotes so a model
+ *  value with spaces (agy's `--model "Gemini 3.1 Pro (High)"`) stays one token.
+ *  Quotes are stripped from the result. */
+export function tokenizeCommand(command: string): string[] {
+  const out: string[] = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(command)) !== null) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}
+
+/** The model preset list for a given provider's picker. */
+export function modelsForProvider(provider: AgentProvider): ModelOption[] {
+  return provider === 'antigravity' ? ANTIGRAVITY_MODELS : AGENT_MODELS;
+}
+
+/** Build the command line to feed into spawnPty, honoring the provider's flags,
+ *  autoMode, and an optional per-agent model override. Claude keeps the user's
+ *  configured `defaultCommand`; other providers use their preset binary so the
+ *  app works without Claude installed. */
 export function buildSpawnCommand(
   config: Pick<HarnessConfig, 'defaultCommand' | 'autoMode'>,
   model?: string,
   provider: AgentProvider = inferAgentProvider(config.defaultCommand)
 ): string {
-  const base = isClaudeProvider(provider)
-    ? config.defaultCommand || defaultCommandForProvider(provider)
-    : defaultCommandForProvider(provider, config.defaultCommand || '') || config.defaultCommand || '';
-  const withModel = isClaudeProvider(provider) && model ? `${base} --model ${model}` : base;
-  if (!config.autoMode) return withModel;
-  const flag = autoModeFlagForProvider(provider);
-  return flag ? `${withModel} ${flag}` : withModel;
+  const preset = providerPreset(provider);
+  // Claude keeps the user's configured defaultCommand; custom falls back to it
+  // too; every other provider (codex, agy) uses its preset binary so the app
+  // works even without Claude installed.
+  const base =
+    provider === 'claude'
+      ? config.defaultCommand || preset.defaultCommand
+      : provider === 'custom'
+        ? config.defaultCommand || ''
+        : preset.defaultCommand;
+  let cmd = base;
+  if (preset.supportsModel && model && preset.modelFlag) {
+    // Quote model values that contain whitespace (agy labels like
+    // "Gemini 3.1 Pro (High)") so the command tokenizer keeps them one arg.
+    const m = /\s/.test(model) ? `"${model}"` : model;
+    cmd = `${cmd} ${preset.modelFlag} ${m}`;
+  }
+  // Auto (skip-permissions) mode appends each provider's own flag — Claude's
+  // bypassPermissions, codex's `-a never -s workspace-write`, agy's skip flag.
+  if (config.autoMode && preset.autoFlag) cmd = `${cmd} ${preset.autoFlag}`;
+  return cmd;
 }

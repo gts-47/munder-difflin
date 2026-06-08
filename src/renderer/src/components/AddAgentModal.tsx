@@ -9,10 +9,12 @@ import { type AccentColorName } from '@/design/tokens';
 import {
   type AgentProvider,
   type HarnessConfig,
-  AGENT_MODELS,
   AGENT_PROVIDER_PRESETS,
   buildSpawnCommand,
+  tokenizeCommand,
+  modelsForProvider,
   inferAgentProvider,
+  providerPreset,
   isClaudeProvider
 } from '@/store/config';
 
@@ -33,6 +35,9 @@ export interface AddAgentModalProps {
 
 export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
   const addAgent = useStore(s => s.addAgent);
+
+  // Default provider follows whatever the global default command is (claude
+  // unless the user reconfigured it); the model only carries over for Claude.
   const initialProvider = inferAgentProvider(config.defaultCommand);
   const initialModel = isClaudeProvider(initialProvider) ? config.defaultModel : undefined;
 
@@ -51,7 +56,10 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
     setModel(id);
     setCommand(buildSpawnCommand(config, id, provider));
   };
-
+  // Switching provider resets the model to that CLI's default and rebuilds the
+  // command from the provider's preset binary (so Antigravity spawns `agy` and
+  // Codex spawns `codex`, not the configured `claude`). For 'custom' we keep the
+  // user's typed command rather than blanking it.
   const pickProvider = (id: AgentProvider) => {
     setProvider(id);
     const nextModel = isClaudeProvider(id) ? config.defaultModel : undefined;
@@ -62,6 +70,7 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
     }
     setCommand(buildSpawnCommand(config, nextModel, id));
   };
+  const preset = providerPreset(provider);
   const [goal, setGoal] = useState('');
   const [isolate, setIsolate] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -84,7 +93,9 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
     const id = uniqueId(name);
     const ptyId = `pty-${id}`;
     // Split the editable command field into argv-style pieces for node-pty.
-    const [exe, ...args] = command.trim().split(/\s+/);
+    // Quote-aware so an agy model label like "Gemini 3.1 Pro (High)" — or any
+    // auto-mode flags appended to the command — stays one argument.
+    const [exe, ...args] = tokenizeCommand(command.trim());
     const spawnRes = await window.cth.spawnPty({
       id: ptyId,
       cwd,
@@ -210,7 +221,15 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
                     <button
                       key={p.id}
                       onClick={() => pickProvider(p.id)}
-                      title={p.id === 'codex' ? 'Spawn codex without Claude-only flags' : p.label}
+                      title={
+                        p.id === 'antigravity'
+                          ? 'Spawn the Antigravity CLI (agy) with a Gemini model'
+                          : p.id === 'codex'
+                            ? 'Spawn the Codex CLI (codex) without Claude-only flags'
+                            : p.id === 'custom'
+                              ? 'Run any command — no Claude-only flags'
+                              : p.label
+                      }
                       style={{
                         padding: '3px 8px 1px',
                         background: active ? `var(--cth-${accent}-light)` : 'var(--cth-cream-100)',
@@ -228,9 +247,9 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
               </div>
             </Row>
 
-            {isClaudeProvider(provider) && <Row label="Model">
+            {preset.supportsModel && <Row label="Model">
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {AGENT_MODELS.map((m) => {
+                {modelsForProvider(provider).map((m) => {
                   const active = (model ?? '') === (m.id ?? '');
                   return (
                     <button
@@ -254,11 +273,19 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
               </div>
             </Row>}
 
-            <Row label={config.autoMode && provider !== 'custom' ? 'Command (auto mode on)' : 'Command'}>
+            <Row label={config.autoMode && preset.autoFlag ? 'Command (auto mode on)' : 'Command'}>
               <input
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}
-                placeholder={provider === 'codex' ? 'codex' : provider === 'custom' ? 'your-agent-cli' : 'claude'}
+                placeholder={
+                  provider === 'antigravity'
+                    ? 'agy'
+                    : provider === 'codex'
+                      ? 'codex'
+                      : provider === 'custom'
+                        ? 'your-agent-cli'
+                        : 'claude'
+                }
                 style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)' }}
               />
             </Row>

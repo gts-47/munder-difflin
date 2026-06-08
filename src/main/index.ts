@@ -27,7 +27,13 @@ import { WebhookServer, type WebhookInbound, type WebhookTaskStatus } from './we
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
 import { ClosingTimeController } from './closingTime';
-import { inferAgentProvider, isClaudeProvider, nonInteractiveEnvForProvider, type AgentProvider } from '../shared/agentProvider';
+import {
+  inferAgentProvider,
+  isClaudeProvider,
+  nonInteractiveEnvForProvider,
+  providerPreset,
+  type AgentProvider
+} from '../shared/agentProvider';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const ptyManager = new PtyManager();
@@ -922,7 +928,12 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
   }
+  // Which CLI is this? Explicit wins; else inferred from the binary
+  // (claude/codex/agy). Non-Claude providers skip every Claude-only spawn step
+  // below. Persist the resolved provider onto opts (+ hive meta) so the registry
+  // record and downstream provider-aware steps agree on one value.
   const provider = inferAgentProvider(opts.command, opts.provider ?? opts.hive?.provider);
+  const claudeProvider = isClaudeProvider(provider);
   opts.provider = provider;
   if (opts.hive) opts.hive = { ...opts.hive, provider };
   // Git isolation: when requested and the cwd is a real repo, give this agent
@@ -976,7 +987,9 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   }
   // Long-run guardrails + tiering (Lane A #6.4/#6.6). All additive to the args
   // already assembled (incl. the hive injection); an explicit choice always wins.
-  if (opts.hive && isClaudeProvider(provider)) {
+  // Claude-only — these are Claude Code flags; other CLIs carry their own flags
+  // in the command string the renderer already built.
+  if (opts.hive && claudeProvider) {
     const cfg = readConfig();
     const args = opts.args ?? [];
     // Model precedence: an explicit per-agent --model (from the renderer) wins;
@@ -989,13 +1002,20 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
     if (typeof cfg.maxTurns === 'number' && cfg.maxTurns > 0 && !args.includes('--max-turns')) {
       args.push('--max-turns', String(cfg.maxTurns));
     }
-    // Idempotent resume (#6.6a): only when explicitly requested and we have a
-    // prior session id for this agent.
-    if (opts.resume === true) {
-      const sid = hive.lastSession(opts.hive.id);
-      if (sid && !args.includes('--resume')) args.push('--resume', sid);
-    }
     opts.args = args;
+  }
+  // Idempotent session resume on respawn (#6.6a) — provider-aware: Claude
+  // `--resume <sid>`, Antigravity `--conversation <id>`. The recorded session id
+  // comes from hook payloads (agy's conversationId flows through the bridge), so
+  // a restored worker continues its prior CLI session. Only when requested AND a
+  // prior id exists for this agent.
+  if (opts.hive && opts.resume === true) {
+    const rf = providerPreset(provider).resumeFlag;
+    const sid = hive.lastSession(opts.hive.id);
+    if (rf && sid) {
+      const args = opts.args ?? [];
+      if (!args.includes(rf)) { args.push(rf, sid); opts.args = args; }
+    }
   }
   // Remember which agent owns this PTY so closing the tab can archive it. A
   // live terminal means active — ensureAgent above already cleared `archived`.
@@ -1003,11 +1023,13 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   // Pre-accept Claude Code's bypass-mode warning + folder-trust dialog so the
   // agent (spawned with --permission-mode bypassPermissions) doesn't stall on an
   // interactive prompt it can't answer and exit code 1. Best-effort, never blocks.
-  if (isClaudeProvider(provider)) {
+  // Claude-only — other CLIs handle their own permission UX.
+  if (claudeProvider) {
     try { ensureClaudePermissionsAccepted(opts.cwd); } catch { /* never block spawn */ }
   }
   // Suppress first-run interactive prompts for providers that need it (e.g. Codex
-  // directory-trust gate). Merges into any env already set on opts.
+  // directory-trust gate via CODEX_NON_INTERACTIVE). Merges into any env already
+  // set on opts.
   const nonInteractiveEnv = nonInteractiveEnvForProvider(provider);
   if (Object.keys(nonInteractiveEnv).length > 0) {
     opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };

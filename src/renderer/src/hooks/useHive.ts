@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore, type Agent, type QueuedMessage, type StationKind, type ToolKind } from '@/store/store';
 import {
   buildSpawnCommand,
+  ASSISTANT_MODEL,
   inferAgentProvider,
   isClaudeProvider,
   type HarnessConfig
@@ -68,7 +69,12 @@ const writeChains = new Map<string, Promise<void>>();
 function submitToPty(ptyId: string, text: string, settleMs = 250): Promise<void> {
   const prev = writeChains.get(ptyId) ?? Promise.resolve();
   const next = prev.catch(() => { /* a failed prior write must not stall the chain */ }).then(async () => {
-    await window.cth.writePty(ptyId, `\x1b[200~${text}\x1b[201~`);
+    // Bracketed paste (ESC[200~ … ESC[201~) only matters for MULTI-LINE text, so a
+    // stray "\n" doesn't submit early (#24). Single-line text (nudges, slash
+    // commands) is sent raw — some TUIs (Antigravity's agy) treat the paste
+    // markers as literal input and never submit, so skipping them is more robust.
+    const payload = text.includes('\n') ? `\x1b[200~${text}\x1b[201~` : text;
+    await window.cth.writePty(ptyId, payload);
     await new Promise((r) => setTimeout(r, 140));
     await window.cth.writePty(ptyId, '\r');
     await new Promise((r) => setTimeout(r, settleMs));
@@ -96,8 +102,17 @@ const TOOL_STATION: Record<string, { station: StationKind; carry?: ToolKind }> =
  *  the MCP station (previously these silently sat at the desk, #5A gap); anything
  *  else → the desk. */
 function stationForTool(tool: string): { station: StationKind; carry?: ToolKind } {
-  return TOOL_STATION[tool]
-    ?? (tool.startsWith('mcp__') ? { station: 'mcp', carry: 'MCP' } : { station: 'desk' });
+  if (TOOL_STATION[tool]) return TOOL_STATION[tool];
+  if (tool.startsWith('mcp__')) return { station: 'mcp', carry: 'MCP' };
+  // Heuristic fallback for non-Claude tool names (Antigravity sends run_command,
+  // ListDir, write_file, … — its hook names differ from Claude's exact tags).
+  // Match write/edit BEFORE read so "write_file" → desk, not shelf.
+  const t = tool.toLowerCase();
+  if (/command|bash|shell|exec|terminal|run_/.test(t)) return { station: 'terminal', carry: 'Bash' };
+  if (/web|fetch|browser|http|url/.test(t)) return { station: 'web', carry: 'WebFetch' };
+  if (/write|edit|create|patch|replace|apply/.test(t)) return { station: 'desk', carry: 'Write' };
+  if (/read|list|view|dir|glob|grep|search|find|file|cat|\bls\b/.test(t)) return { station: 'shelf', carry: 'Read' };
+  return { station: 'desk' };
 }
 
 /**
@@ -230,6 +245,15 @@ export function useHive(config: HarnessConfig | null): void {
         // A turn is in progress (prompt submitted / tool just finished) — keep
         // it working so it doesn't flicker idle between tool calls.
         if (!breakerArmed) updateAgent(e.agentId, { status: 'working' });
+      } else if (e.event === 'PreInvocation') {
+        // Antigravity (agy): the model is being called — it's thinking/working.
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'working', action: 'thinking' });
+      } else if (e.event === 'PostInvocation') {
+        // agy's per-turn boundary. Unlike Claude, agy's Stop fires only on process
+        // EXIT, so without this an agy worker would never register as idle and the
+        // inbox-wake nudge (idle-only) could never reach it — its mail would sit
+        // undrained. Treat it as idle; a follow-up tool/turn re-sets working.
+        if (!breakerArmed) updateAgent(e.agentId, { status: 'idle', action: 'idle', carrying: undefined });
       } else if (e.event === 'Stop' || e.event === 'SubagentStop') {
         // A blocked Stop means the agent is being re-engaged to process its
         // inbox — it's NOT idle, so keep it working until it genuinely stops.
@@ -498,6 +522,8 @@ export function useHive(config: HarnessConfig | null): void {
       const { agents, messageQueues, enqueueMessage } = useStore.getState();
       for (const a of agents) {
         if (!a.ptyId) continue;
+        // /compact is a Claude Code slash command — non-Claude CLIs (agy, codex)
+        // would just receive it as literal prompt text. Skip them.
         if (!isClaudeProvider(inferAgentProvider(a.command, a.provider))) continue;
         const queued = messageQueues[a.id] ?? [];
         if (queued.some((m) => m.text.trimStart().startsWith('/compact'))) continue;

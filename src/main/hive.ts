@@ -21,12 +21,19 @@ import {
   existsSync, mkdirSync, readFileSync, writeFileSync, renameSync,
   readdirSync, statSync, rmSync, appendFileSync
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { randomBytes, createHash } from 'node:crypto';
 import type { AgentUsageSample } from './usage';
 import { COMMAND_GROUPS } from '../shared/claudeCommands';
-import { isClaudeProvider, type AgentProvider } from '../shared/agentProvider';
+import {
+  isClaudeProvider,
+  isHiveAwareProvider,
+  canReceiveInbox,
+  providerPreset,
+  type AgentProvider
+} from '../shared/agentProvider';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -86,11 +93,15 @@ export interface HiveTask {
 export interface AgentMeta {
   id: string;
   name: string;
+  /** Which CLI this agent runs on. Defaults to 'claude' when unset (legacy). */
   provider?: AgentProvider;
   role?: string;
   capabilities?: string[];
   cwd: string;
   isGod?: boolean;
+  /** Michael's prep assistant — enriches prompts and forwards them to Michael.
+   *  Send-only: excluded from broadcast fan-out so it never drains an inbox. */
+  isAssistant?: boolean;
 }
 
 export interface RegistryAgent extends AgentMeta {
@@ -310,6 +321,44 @@ export class HiveManager {
 
     const claudeProvider = isClaudeProvider(meta.provider ?? 'claude');
 
+    // Non-hive-aware providers (Antigravity's `agy`, OpenAI's `codex`) don't
+    // understand Claude Code's flags or hook protocol — no telemetry, no
+    // `--settings` hooks. But they DO take an INITIAL prompt to orient the
+    // session, so we still inject the same hive identity+protocol as the first
+    // turn — the closest thing to `--append-system-prompt` these CLIs offer
+    // (after the first turn the session continues normally). This is what makes
+    // a Gemini/Codex worker hive-aware without Claude installed at all.
+    //
+    // How the prompt rides in differs by CLI:
+    //  - agy takes it under a flag (`agy -i "<prompt>"`) → push [flag, prompt].
+    //  - codex takes it POSITIONALLY (`codex "<prompt>"`, no flag) → push the
+    //    bare prompt as a trailing arg (node-pty passes argv literally, so it
+    //    arrives as one positional argument after codex's own flags).
+    if (!isHiveAwareProvider(meta.provider)) {
+      const preset = providerPreset(meta.provider ?? 'claude');
+      const flag = preset.initialPromptFlag;
+      const prompt = this.injectedPrompt(meta, dir, root, opts.semanticMemory ?? false);
+      // Only agy exposes a Claude-compatible lifecycle-hook surface we can bridge
+      // (PreToolUse/PostToolUse/Stop/…). Install the agy-hook shim so a Gemini
+      // worker gets the SAME live status + inbox-drain Claude does — on the
+      // subscription, no SDK/API key. Codex has NO such hooks and cannot reuse the
+      // bridge, so it is NOT installed for codex; codex relies on the renderer's
+      // idle inbox-wake nudge to drain its inbox (see useHive.ts) and on its outbox
+      // being drained provider-agnostically by the router.
+      if (meta.provider === 'antigravity') {
+        const sock = this.sockPath();
+        if (sock) {
+          env.HIVE_SOCK = sock;
+          try { this.installAgyHooks(); } catch (e) { console.error('[hive] installAgyHooks failed:', e); }
+        }
+      }
+      // Inject the protocol text whichever way the CLI accepts it. If a provider
+      // somehow exposes neither a flag nor a positional prompt, spawn bare.
+      if (flag) return { args: [flag, prompt], env };
+      // Positional initial prompt (codex). Append as a trailing argv element.
+      return { args: [prompt], env };
+    }
+
     // Stage 7A — first-party Claude Code telemetry → the embedded loopback OTLP
     // collector (telemetry.ts). Pure env, no --settings change. Only injected
     // for Claude Code once the collector is up (otelEndpoint set), so telemetry-
@@ -487,6 +536,8 @@ export class HiveManager {
     const godLine = meta.isGod
       ? 'You are the GOD / ORCHESTRATOR of this hive — your job is to ORCHESTRATE, not to implement: maintain live situational awareness and delegate the work. (1) AWARENESS — always know what is going on: keep an accurate picture of every agent (active vs archived/idle), the task board, and all in-flight work; drain your inbox continually and triage every other agent\'s requests, answering clarifications so the team runs autonomously. (2) DELEGATE — decompose work and fan it out to the hive agents via their inboxes (route messages and assign owners; do not do their jobs); do NOT take on grunt implementation yourself. (3) OWN ONLY THE IMPORTANT, high-leverage things — task decomposition, dispatch decisions, sign-offs, conflict resolution, branch integration, and final QA — and remain the sole scribe of board.md. You are otherwise fully autonomous — there is NO separate approval queue. For the genuinely critical (destructive actions, spending real money, scope changes, unresolvable conflicts), ask the human directly in your own session and let the tool-permission prompt gate the action; the human approves natively, including remotely from their phone via /remote-control. Keep the team unblocked. When you DISPATCH a task, write it as a 4-part contract so the agent can run autonomously: (1) OBJECTIVE — the concrete goal; (2) OUTPUT — the expected deliverable/format; (3) TOOLS — what to use or avoid, and any references to read instead of re-deriving; (4) BOUNDARIES — scope limits + the definition of done. Pass references (file paths, message ids, board sections), not pasted content — keep dispatches short.'
         + ` MONITOR the floor by reading ${root}/fleet.json (live per-agent tokens, cost, status, last tool, breaker level, inbox backlog) and ${root}/registry.json — note that running 'claude agents' will NOT list your hive's sibling agents. A full Claude Code command reference is at ${root}/COMMANDS.md (slash commands act ONLY on your own session; CLI commands run in your shell and can target the fleet). You periodically receive scheduler / "Heartbeat" standup requests — on each, review every agent via fleet.json, re-engage anyone stalled, over-budget, or breaker-armed, and keep board.md and tasks.json accurate. In tasks.json, ALWAYS set each task's "assignee" to the worker's agent id the moment you dispatch it, and NEVER clear it on status changes — a done card must still say who did the work (the human reads the board by who-did-what). HUMAN FEEDBACK is first-class in the ledger: when a task can only proceed with the human's input — a QUESTION to answer OR an ACTION only the human can perform (create an account, approve a purchase, provide credentials/screenshots, test on their device) — set its status to "blocked" and append the concrete ask to the card's "humanQA" array (push {"q":"...","askedAt":"<iso>"}; phrase actions as clear to-dos; keep every past entry — the history documents the card's decisions). The harness surfaces open questions on the office floor's ASK ME board; the human's answer lands in the same entry ("a") AND arrives as an inbox message to you — read it, act on it, and unblock the card so work continues. Do NOT park human questions in separate files (no HumanQuestion.md) and never sit waiting on the human in your own session. Steward the token budget.`
+      : meta.isAssistant
+      ? 'You are Michael\'s PREP ASSISTANT. You will be handed short, possibly vague instructions (each begins with "ENRICH TASK:"). For each one: (1) figure out which project it concerns and cd into the most relevant repo — you start in Michael\'s home directory; (2) gather concrete context READ-ONLY (exact file paths, current state, relevant code, conventions, active branch, gotchas) — NEVER modify, create, or delete files; (3) rewrite the instruction into ONE clear, self-contained prompt that Michael can execute autonomously, preserving the user\'s original intent without inventing scope. Then deliver it: write ONE message JSON into your outbox with "to":"god", "act":"request", a short subject, and the finished prompt as the body. Do NOT perform the task yourself — your only output is the improved prompt sent to Michael.'
       : 'For anything ambiguous, cross-cutting, or needing sign-off, address a message to "god".';
     const guardrailsLine = 'Guardrails: a circuit breaker watches the floor — a "Circuit breaker: steer/constrain" message means you are looping or overspending, so STOP repeating, summarize what you tried, and follow it. Be token-frugal (a floor-wide or per-agent token budget can pause you). The shared plan has two parts: board.md (freeform; god is the sole scribe) and tasks.json (structured kanban — todo/doing/blocked/done).';
     return [
@@ -555,26 +606,44 @@ export class HiveManager {
     // at "human" is handled by the god/orchestrator, the human's proxy here.
     const resolveTo = (to: string): string => (to === 'human' || to === 'god' ? godId : to);
     const targets = msg.to === 'broadcast'
-      // The roster for fan-out is the ACTIVE registry: skip non-Claude providers
-      // without hook/protocol support, and any archived agent (closed tab) so mail
-      // never piles into a dead inbox no one will read.
-      ? Object.keys(reg.agents).filter((a) => {
-        const agent = reg.agents[a];
-        return a !== msg.from
-          && !agent?.archived
-          && isClaudeProvider(agent?.provider ?? 'claude');
-      })
+      // The roster for fan-out is the ACTIVE registry: skip the send-only prep
+      // assistant, any archived agent (closed tab), and providers that can't
+      // drain an inbox (hookless custom commands) so mail never piles into a dead
+      // inbox no one reads. Claude, Codex AND Antigravity workers ARE included —
+      // each can drain its inbox: Claude via its Stop hook, Antigravity via the
+      // agy-hook Stop→drain bridge, Codex via the renderer's idle inbox-wake nudge.
+      ? Object.keys(reg.agents).filter((a) =>
+          a !== msg.from
+          && !reg.agents[a]?.isAssistant
+          && !reg.agents[a]?.archived
+          && canReceiveInbox(reg.agents[a]?.provider))
       // Never deliver to self — guards a god → "human" message looping back to god.
       : [resolveTo(msg.to)].filter((t) => t !== msg.from);
     for (const t of targets) {
-      const target = reg.agents[t];
-      if (target && !isClaudeProvider(target.provider ?? 'claude')) {
-        // Route non-Claude (e.g. Codex) agent tasks directly to their REPL
-        // instead of bouncing. The renderer enqueues the raw text; the drain
-        // effect types it into the agent's terminal when it next goes idle.
-        // Codex gets no inbox nudge or /compact — only the task body verbatim.
-        const text = [msg.subject, '', msg.body].filter(Boolean).join('\n');
-        this.emit?.('hive:enqueueToAgent', { targetId: t, text });
+      // The send-only prep assistant must never be a delivery target: it doesn't
+      // drain an inbox, so direct mail to it would rot unread (observed live: a
+      // task brief plus the follow-up reprimand about the unread inbox, both
+      // unread for hours). Bounce such mail to god instead, so the sender's intent
+      // surfaces immediately and nothing is silently lost.
+      if (reg.agents[t]?.isAssistant) {
+        this.deliver({
+          ...msg,
+          to: godId,
+          subject: `[bounced — "${t}" is the send-only prep assistant; route work to a real agent] ${msg.subject}`
+        }, godId);
+        continue;
+      }
+      // A provider with no way to drain its inbox (a hookless custom command)
+      // would let direct mail rot unread — bounce it to the god to relay as a
+      // live prompt. Claude (Stop hook), Antigravity (agy-hook Stop→drain bridge)
+      // and Codex (renderer idle inbox-wake nudge) all drain their inbox, so they
+      // receive directly into their inbox/. God is exempt (the bounce target).
+      if (t !== godId && !canReceiveInbox(reg.agents[t]?.provider)) {
+        this.deliver({
+          ...msg,
+          to: godId,
+          subject: `[bounced — "${t}" runs ${reg.agents[t]?.provider ?? 'a hookless CLI'} and can't drain its hive inbox; relay this to it] ${msg.subject}`
+        }, godId);
         continue;
       }
       this.deliver(msg, t);
@@ -690,6 +759,52 @@ export class HiveManager {
     if (!existsSync(dir)) return 0;
     try { return readdirSync(dir).filter((f) => f.endsWith('.json')).length; } catch { return 0; }
   }
+  /** Install the Antigravity (`agy`) lifecycle-hook bridge: write the normalizer
+   *  shim and merge a `munder-hive` hook group into agy's global hooks.json so a
+   *  Gemini worker reports PreToolUse/PostToolUse/Stop/PreInvocation/PostInvocation
+   *  to this HookServer (live status + inbox-drain), reusing the Claude pipeline.
+   *
+   *  Two agy-isms handled: (1) antigravity-cli#49 — agy LOADS hooks from
+   *  `~/.gemini/antigravity-cli/hooks.json` but TRIGGERS from `~/.gemini/config/
+   *  hooks.json`, so we write BOTH; (2) commands go to cmd.exe and agy mangles
+   *  embedded quotes, so the shim path must be space-free (hive roots are).
+   *  Runtime-scoped by AGENT_ID (the shim no-ops for non-hive agy sessions), so
+   *  this global config never disturbs the user's own `agy` usage. Best-effort,
+   *  idempotent (only our own group is overwritten). */
+  private installAgyHooks(): void {
+    const root = this.root();
+    if (!root) return;
+    const shim = join(root, 'bin', 'agy-hook.cjs');
+    mkdirSync(join(root, 'bin'), { recursive: true });
+    writeFileSync(shim, AGY_HOOK_SHIM, 'utf8');
+    const tool = (event: string) => ({
+      matcher: '*',
+      hooks: [{ type: 'command', command: `node ${shim} ${event}`, timeout: 0 }]
+    });
+    const plain = (event: string) => ({
+      hooks: [{ type: 'command', command: `node ${shim} ${event}`, timeout: 0 }]
+    });
+    const group = {
+      PreToolUse: [tool('PreToolUse')],
+      PostToolUse: [tool('PostToolUse')],
+      PreInvocation: [plain('PreInvocation')],
+      PostInvocation: [plain('PostInvocation')],
+      Stop: [plain('Stop')]
+    };
+    const gem = join(homedir(), '.gemini');
+    for (const p of [join(gem, 'config', 'hooks.json'), join(gem, 'antigravity-cli', 'hooks.json')]) {
+      try {
+        mkdirSync(dirname(p), { recursive: true });
+        let existing: Record<string, unknown> = {};
+        if (existsSync(p)) {
+          try { existing = JSON.parse(readFileSync(p, 'utf8')) as Record<string, unknown>; } catch { existing = {}; }
+        }
+        existing['munder-hive'] = group;
+        writeFileSync(p, JSON.stringify(existing, null, 2), 'utf8');
+      } catch { /* best-effort per file */ }
+    }
+  }
+
   /** Write the live fleet snapshot Michael reads (`fleet.json`, gitignored).
    *  Best-effort — called from a timer, must never throw. */
   writeFleetSnapshot(snapshot: unknown): void {
@@ -962,5 +1077,69 @@ process.stdin.on('end', () => {
   c.on('end', () => done(0));
   c.on('error', () => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();
+});
+`;
+
+// ─── agy-hook shim (written to <hive>/bin/agy-hook.cjs) ──────────────────────
+// Antigravity's `agy` CLI fires lifecycle hooks (PreToolUse/PostToolUse/Stop/
+// PreInvocation/PostInvocation) but with a DIFFERENT stdin shape than Claude
+// (conversationId / toolCall{name,args} / workspacePaths, and no hook_event_name
+// — the event arrives as argv from the hooks.json command). This shim normalizes
+// that into the same HookPayload the HookServer already consumes, so status,
+// inbox-drain-on-Stop, and tool gating are reused UNCHANGED, then translates the
+// server's Claude-shaped response back into agy's stdout contract (decision:
+// allow|deny|block + a message). Scoped by AGENT_ID: a personal agy session
+// (no AGENT_ID in env) is a no-op, so the global hooks.json never disturbs the
+// user's own agy usage — only hive workers (spawned with AGENT_ID set) bridge.
+// NOTE (agy bug, antigravity-cli#49): the loader reads ~/.gemini/antigravity-cli/
+// hooks.json but the trigger reads ~/.gemini/config/hooks.json — we write BOTH.
+const AGY_HOOK_SHIM = `#!/usr/bin/env node
+'use strict';
+const net = require('net');
+const event = process.argv[2] || 'Unknown';
+const agentId = process.env.AGENT_ID || null;
+let data = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', (d) => { data += d; });
+process.stdin.on('end', () => {
+  const sock = process.env.HIVE_SOCK;
+  if (!agentId || !sock) { process.exit(0); } // not a hive worker → ignore
+  let agy = {};
+  try { agy = JSON.parse(data || '{}'); } catch (_) {}
+  const tc = agy.toolCall || {};
+  const payload = {
+    hook_event_name: event,
+    agent_id: agentId,
+    session_id: agy.conversationId,
+    transcript_path: agy.transcriptPath,
+    cwd: Array.isArray(agy.workspacePaths) ? agy.workspacePaths[0] : undefined,
+    tool_name: tc.name,
+    tool_input: tc.args
+  };
+  let resp = '';
+  const done = () => {
+    // Translate the HookServer's Claude-shaped reply into agy's contract. CRITICAL:
+    // agy treats ANY object written to stdout as a decision and FAIL-CLOSES (an
+    // empty/decision-less object = DENY). So emit JSON ONLY when there's a real
+    // directive (deny/block/steer); otherwise write NOTHING — no output = allow.
+    let out = null;
+    try {
+      const r = JSON.parse(resp || '{}');
+      if (r.decision === 'block') out = { decision: 'block', reason: r.reason, stopReason: r.reason, systemMessage: r.reason };
+      else if (r.hookSpecificOutput && r.hookSpecificOutput.permissionDecision === 'deny') out = { decision: 'deny', reason: r.hookSpecificOutput.permissionDecisionReason };
+      else if (r.continue === false) out = { decision: 'block', stopReason: r.stopReason };
+      else if (r.hookSpecificOutput && r.hookSpecificOutput.additionalContext) out = { systemMessage: r.hookSpecificOutput.additionalContext };
+    } catch (_) {}
+    if (out) { try { process.stdout.write(JSON.stringify(out)); } catch (_) {} }
+    process.exit(0);
+  };
+  try {
+    const c = net.createConnection(sock, () => c.write(JSON.stringify(payload) + '\\n'));
+    c.setEncoding('utf8');
+    c.on('data', (d) => { resp += d; });
+    c.on('end', done);
+    c.on('error', () => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  } catch (_) { process.exit(0); }
 });
 `;
