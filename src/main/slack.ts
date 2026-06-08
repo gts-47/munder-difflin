@@ -10,7 +10,7 @@
  *   - on a plain `message` event, strips a leading bot mention and emits the
  *     text via `onMessage`.
  *
- * It also opens a `localtunnel` so the local port is reachable from Slack's
+ * It also opens a `tunnelmole` tunnel so the local port is reachable from Slack's
  * servers; the tunnel URL is what the user pastes into their Slack app's Event
  * Subscriptions → Request URL. The tunnel is best-effort: the local handler is
  * the security boundary and stays up even if the tunnel can't be established.
@@ -21,10 +21,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import localtunnel from 'localtunnel';
-
-/** The live tunnel handle returned by localtunnel (has `url` + `close()` + EventEmitter). */
-type Tunnel = Awaited<ReturnType<typeof localtunnel>>;
+import { tunnelmole } from 'tunnelmole';
 
 export interface SlackWebhookServerOptions {
   /** Local TCP port the HTTP server binds to (and the tunnel forwards to). */
@@ -59,7 +56,7 @@ const TUNNEL_START_TIMEOUT_MS = 10_000;
 
 export class SlackWebhookServer {
   private server: Server | null = null;
-  private tunnel: Tunnel | null = null;
+  private tunnelUrl: string | null = null;
   private readonly port: number;
   private readonly signingSecret: string;
   private readonly channelId?: string;
@@ -89,20 +86,21 @@ export class SlackWebhookServer {
       return { ok: false, error: `failed to bind port ${this.port}: ${errMsg(e)}` };
     }
     try {
-      const tunnel = await this.openTunnel();
-      this.tunnel = tunnel;
-      // A dropped tunnel must not crash the main process; the local server stays up.
-      tunnel.on('error', () => { /* tunnel hiccup — ignore, server still listening */ });
-      return { ok: true, url: tunnel.url };
+      const url = await this.openTunnel();
+      if (!url) throw new Error('tunnelmole returned empty URL');
+      this.tunnelUrl = url;
+      // tunnelmole runs in the background; there is no close handle to wire here.
+      return { ok: true, url };
     } catch (e) {
-      return { ok: true, error: `tunnel unavailable: ${errMsg(e)}` };
+      // Surface the tunnel failure rather than silently returning ok:true with no url.
+      return { ok: false, error: `tunnel unavailable: ${errMsg(e)}` };
     }
   }
 
-  /** Close the tunnel and HTTP server. Idempotent and best-effort. */
+  /** Close the HTTP server. Idempotent and best-effort.
+   *  Note: tunnelmole has no documented close handle; teardown is best-effort. */
   stop(): void {
-    try { this.tunnel?.close(); } catch { /* noop */ }
-    this.tunnel = null;
+    this.tunnelUrl = null;
     try { this.server?.close(); } catch { /* noop */ }
     this.server = null;
   }
@@ -120,11 +118,12 @@ export class SlackWebhookServer {
     });
   }
 
-  private openTunnel(): Promise<Tunnel> {
-    return new Promise<Tunnel>((resolve, reject) => {
+  private openTunnel(): Promise<string> {
+    // TODO: optional persistent domain — pass `domain` here when config carries one.
+    return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('timed out')), TUNNEL_START_TIMEOUT_MS);
-      Promise.resolve(localtunnel({ port: this.port }))
-        .then((t) => { clearTimeout(timer); resolve(t); })
+      tunnelmole({ port: this.port })
+        .then((url) => { clearTimeout(timer); resolve(url); })
         .catch((e) => { clearTimeout(timer); reject(e); });
     });
   }
