@@ -8,12 +8,20 @@
   <id>https://munderdiffl.in/blog/</id>
   <author><name>Chaitanya Giri</name><uri>https://munderdiffl.in</uri></author>
   <entry>
-    <title>Launching Munder Difflin v0.2.3</title>
-    <link href="https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/" />
-    <id>https://munderdiffl.in/blog/launching-munder-difflin-v0-2-3/</id>
+    <title>Launching Munder Difflin v0.2.4</title>
+    <link href="https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/" />
+    <id>https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/</id>
     <published>2026-06-09T00:00:00.000Z</published>
     <updated>2026-06-09T00:00:00.000Z</updated><category term="Story" />
-    <summary>Munder Difflin v0.2.3 makes the floor multi-provider: Claude Code, Antigravity (Gemini), and OpenAI Codex can now work as first-class hive participants.</summary>
+    <summary>Munder Difflin v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity has had since day one. Claude Code, Antigravity, and Codex are now equally first-class.</summary>
+  </entry>
+  <entry>
+    <title>Munder Difflin v0.2.4 Feature Walkthrough</title>
+    <link href="https://munderdiffl.in/blog/munder-difflin-v0-2-4-feature-walkthrough/" />
+    <id>https://munderdiffl.in/blog/munder-difflin-v0-2-4-feature-walkthrough/</id>
+    <published>2026-06-09T00:00:00.000Z</published>
+    <updated>2026-06-09T00:00:00.000Z</updated><category term="Guides" />
+    <summary>A comprehensive guide to every change in Munder Difflin v0.2.4 — how the Codex lifecycle-hook bridge achieves full hive parity, what the Schedules tab adds, why tunnelmole replaced localtunnel, and what else shipped.</summary>
   </entry>
   <entry>
     <title>Launching Munder Difflin v0.2.0</title>
@@ -478,13 +486,5 @@
     <published>2026-06-03T00:00:00.000Z</published>
     <updated>2026-06-03T00:00:00.000Z</updated><category term="Internals" />
     <summary>xterm.js performance for many live PTYs: a terminal pool, render-only-visible, smart scrollback, and accelerated rendering to stream dozens at once.</summary>
-  </entry>
-  <entry>
-    <title>A vibe-kanban Alternative for Coordinating AI Agents</title>
-    <link href="https://munderdiffl.in/blog/vibe-kanban-alternative/" />
-    <id>https://munderdiffl.in/blog/vibe-kanban-alternative/</id>
-    <published>2026-06-03T00:00:00.000Z</published>
-    <updated>2026-06-03T00:00:00.000Z</updated><category term="Comparisons" />
-    <summary>vibe-kanban gives you a board to assign tasks to coding agents. When a self-routing hive is the better vibe-kanban alternative — and when a board wins.</summary>
   </entry>
 </feed>

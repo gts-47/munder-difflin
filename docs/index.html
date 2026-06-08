@@ -33,7 +33,7 @@
   "url": "https://munderdiffl.in/",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "macOS, Windows, Linux",
-  "softwareVersion": "0.2.3",
+  "softwareVersion": "0.2.4",
   "downloadUrl": "https://github.com/chaitanyagiri/munder-difflin/releases/latest",
   "softwareHelp": "https://github.com/chaitanyagiri/munder-difflin#readme",
   "license": "https://github.com/chaitanyagiri/munder-difflin/blob/main/LICENSE",
@@ -497,6 +497,24 @@
   .foot-meta { color: var(--ink-faint); font-size: 13px; font-family: var(--font-mono); margin-top: 22px; }
   .disclaimer { margin-top: 12px; max-width: 680px; font-size: 12px; color: var(--ink-faint); }
 
+  /* ---------- provider badges (hero) ---------- */
+  .provider-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; flex-wrap: wrap; margin: 22px auto 0;
+  }
+  .prov {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink);
+    background: var(--white); border: var(--border); padding: 7px 13px; box-shadow: var(--shadow-chip);
+  }
+  .prov-new { background: var(--lemon); }
+  .prov-ic { font-size: 15px; }
+  .prov-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    background: var(--maroon); color: #fff; padding: 2px 6px; margin-left: 4px;
+  }
+  .prov-sep { font-family: var(--font-mono); font-size: 20px; color: var(--ink-faint); font-weight: 300; }
+
   @media (prefers-reduced-motion: reduce) {
     .reveal { opacity: 1; transform: none; transition: none; }
     .live-dot { animation: none !important; }
@@ -509,6 +527,12 @@
     nav { gap: 10px; }
     .brand-logo { height: 28px; }
     .nav-actions { gap: 8px; }
+    /* hero chip: shrink + lock to one line so it never wraps on mobile */
+    .chip { font-size: 10px; letter-spacing: 0.04em; padding: 6px 10px; gap: 5px; white-space: nowrap; }
+  }
+  @media (max-width: 400px) {
+    /* narrow phones (375px): reduce further so the full pill fits in one line */
+    .chip { font-size: 9px; letter-spacing: 0.02em; padding: 5px 8px; gap: 4px; }
   }
 </style>
 </head>
@@ -537,15 +561,22 @@
 <!-- ===================== HERO ===================== -->
 <header class="hero">
   <div class="wrap">
-    <div class="chip reveal">⚡ <b>v0.2.3</b> · Multi-provider · Open source · macOS · Windows</div>
+    <div class="chip reveal">⚡ <b>v0.2.4</b> · Multi-provider · Open source · macOS · Windows</div>
     <h1 class="hero-title reveal">
       Agents that build <em>while you do your thing.</em>
     </h1>
     <p class="hero-sub reveal">
-      Munder&nbsp;Difflin is a local harness for terminal agents like <b>Claude&nbsp;Code</b>, <b>Antigravity</b>&nbsp;(Gemini · <code class="mono">agy</code>), and <b>OpenAI&nbsp;Codex</b>. It runs on
-      your PC — orchestrating your agents and giving them <b>memory, shared context, and all the tools you
-      already use</b> — so they build your thing 24/7.
+      Three CLIs. One hive. <b>v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity
+      has had since day one.</b> Claude&nbsp;Code, Antigravity&nbsp;(Gemini · <code class="mono">agy</code>), and
+      OpenAI&nbsp;Codex all run on your PC, sharing one memory, one mailbox system, one orchestrator you talk to.
     </p>
+    <div class="provider-bar reveal">
+      <span class="prov"><span class="prov-ic">🤖</span><span class="prov-nm">Claude&nbsp;Code</span></span>
+      <span class="prov-sep">+</span>
+      <span class="prov"><span class="prov-ic">✦</span><span class="prov-nm">Antigravity</span></span>
+      <span class="prov-sep">+</span>
+      <span class="prov prov-new"><span class="prov-ic">⬡</span><span class="prov-nm">OpenAI&nbsp;Codex</span><span class="prov-badge">full parity</span></span>
+    </div>
     <div class="hero-cta reveal">
       <a class="btn primary" data-download href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download free</a>
       <a class="btn ghost" href="/blog/how-to-install-and-use-munder-difflin/"><span class="ic">📖</span> Get started</a>
@@ -771,11 +802,11 @@
 <!-- ===================== CLAUDE ECOSYSTEM ===================== -->
 <section id="claude">
   <div class="wrap">
-    <div class="eyebrow reveal">Claude Code · Antigravity · Codex</div>
-    <h2 class="h2 reveal">Your agents. <span class="sky">Every function a company needs.</span></h2>
-    <p class="lead reveal">The floor is no longer Claude-only. Run <b>Claude&nbsp;Code</b>, <b>Antigravity</b> (Gemini · <code class="inline">agy</code>),
-      or <b>OpenAI&nbsp;Codex</b> as first-class hive participants — each on its own desk, with the same inbox,
-      routing, and shared memory. One orchestrator. Every function your business runs on.</p>
+    <div class="eyebrow reveal">v0.2.4 · Claude Code · Antigravity · Codex</div>
+    <h2 class="h2 reveal">Three CLIs. <span class="sky">One hive. Full parity.</span></h2>
+    <p class="lead reveal">The floor is no longer Claude-only — and in v0.2.4, it's fully equal. <b>Claude&nbsp;Code</b>,
+      <b>Antigravity</b> (Gemini · <code class="inline">agy</code>), and <b>OpenAI&nbsp;Codex</b> each have a
+      lifecycle-hook bridge, a mailbox, and a seat at the same table. One orchestrator. Every function your business runs on.</p>
 
     <div class="fn-grid reveal">
       <div class="fn-card"><div class="fn-ic">💻</div><div class="fn-label">Engineering</div><div class="fn-ex">code · review · test · ship</div></div>
@@ -792,10 +823,11 @@
 
     <div class="grid-2">
       <div class="card eco-card reveal">
-        <h3><span class="ic">🔌</span> Claude, Gemini, or Codex — all first-class</h3>
-        <p>Every agent is a real terminal — a Claude Code session, an Antigravity (Gemini · <code class="inline">agy</code>)
-          session, or an OpenAI Codex session — using your subscription, your MCP servers, your hooks. Munder Difflin
-          gives each one a desk, a mailbox, and a shared memory. Nothing is reinvented.</p>
+        <h3><span class="ic">🔌</span> Claude, Gemini, Codex — same bridge, full parity</h3>
+        <p>v0.2.4's headline: <b>Codex now has a full lifecycle-hook bridge</b> — the same integration Antigravity
+          has had since v0.2.3. All three CLIs run through one unified dispatch path: live status, inbox drain, and
+          outbox routing work identically whether the agent is Claude Code, <code class="inline">agy</code>, or
+          <code class="inline">codex</code>. Every provider gets a desk, a mailbox, and shared memory.</p>
       </div>
       <div class="card eco-card reveal">
         <h3><span class="ic">🧠</span> Runs your whole company, not just your codebase</h3>
@@ -904,15 +936,15 @@
 <!-- ===================== FINAL CTA ===================== -->
 <section class="final">
   <div class="wrap">
-    <div class="eyebrow reveal">v0.2.3 · Open beta</div>
-    <h2 class="reveal">Run an office of agents <span class="sky">while you sleep.</span></h2>
-    <p class="reveal">Free, open source, and fully local. Download a build for macOS, Windows, or Linux — or clone
-      and run in two commands. It drives the terminal agent you already have.</p>
+    <div class="eyebrow reveal">v0.2.4 · Open beta</div>
+    <h2 class="reveal">Three CLIs. One hive. <span class="sky">Ships while you sleep.</span></h2>
+    <p class="reveal">v0.2.4 — Claude Code, Antigravity, and Codex now run with equal hive parity. Free, open source,
+      and fully local. Download for macOS, Windows, or Linux — or clone and run in two commands.</p>
     <div class="center-cta reveal">
       <a class="btn primary" data-download href="https://github.com/chaitanyagiri/munder-difflin/releases/latest"><span class="ic">⤓</span> Download free</a>
       <a class="btn sky" href="https://github.com/chaitanyagiri/munder-difflin">★ Star on GitHub</a>
     </div>
-    <p class="meta reveal">macOS · Windows · Linux · MIT-licensed · Bring your own Claude Code, Antigravity, or Codex</p>
+    <p class="meta reveal">macOS · Windows · Linux · MIT-licensed · Claude Code · Antigravity (Gemini) · OpenAI Codex</p>
   </div>
 </section>
 
@@ -958,7 +990,7 @@
   // download picker — pick macOS / Windows / Linux, click starts the download
   (function () {
     var REPO = 'chaitanyagiri/munder-difflin';
-    var REL = '0.2.3'; // fallback version; live links are resolved from the GitHub API below
+    var REL = '0.2.4'; // fallback version; live links are resolved from the GitHub API below
     var BASE = 'https://github.com/' + REPO + '/releases/latest/download/';
     var PLATFORMS = [
       { key: 'mac',   icon: '🍎', os: 'macOS',   sub: 'Universal · Apple Silicon + Intel', match: 'mac-universal.dmg',     file: 'Munder-Difflin-' + REL + '-mac-universal.dmg' },

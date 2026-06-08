@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Launching Munder Difflin v0.2.4 — Munder Difflin Blog</title>
+<meta name="description" content="Munder Difflin v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity has had since day one. Claude Code, Antigravity, and Codex are now equally first-class." />
+<link rel="canonical" href="https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/" />
+
+<link rel="icon" type="image/png" href="https://munderdiffl.in/logo.png" />
+<link rel="apple-touch-icon" href="https://munderdiffl.in/logo.png" />
+<meta name="theme-color" content="#F5F2E8" />
+
+<!-- Open Graph -->
+<meta property="og:site_name" content="Munder Difflin Blog" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="Launching Munder Difflin v0.2.4 — Munder Difflin Blog" />
+<meta property="og:description" content="Munder Difflin v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity has had since day one. Claude Code, Antigravity, and Codex are now equally first-class." />
+<meta property="og:url" content="https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/" />
+<meta property="og:image" content="https://munderdiffl.in/media/og.png" />
+<meta property="og:locale" content="en_US" />
+<meta property="article:published_time" content="2026-06-09T00:00:00.000Z" />
+<meta property="article:author" content="Chaitanya Giri" />
+<meta property="article:tag" content="Story" />
+<meta property="article:tag" content="Release" />
+<meta property="article:tag" content="Multi-Agent" />
+<meta property="article:tag" content="Claude Code" />
+<meta property="article:tag" content="Codex" />
+<meta property="article:tag" content="Open Source" />
+
+
+<!-- Twitter -->
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Launching Munder Difflin v0.2.4 — Munder Difflin Blog" />
+<meta name="twitter:description" content="Munder Difflin v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity has had since day one. Claude Code, Antigravity, and Codex are now equally first-class." />
+<meta name="twitter:image" content="https://munderdiffl.in/media/og.png" />
+
+<link rel="alternate" type="application/atom+xml" title="Munder Difflin Blog" href="https://munderdiffl.in/blog/feed.xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/blog/assets/blog.css" />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "Launching Munder Difflin v0.2.4",
+  "description": "Munder Difflin v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity has had since day one. Claude Code, Antigravity, and Codex are now equally first-class.",
+  "image": ["https://munderdiffl.in/media/og.png"],
+  "datePublished": "2026-06-09T00:00:00.000Z",
+  "dateModified": "2026-06-09T00:00:00.000Z",
+  "author": { "@type": "Person", "name": "Chaitanya Giri" },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Munder Difflin",
+    "logo": { "@type": "ImageObject", "url": "https://munderdiffl.in/logo.png" }
+  },
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/" },
+  "keywords": "munder difflin v0.2.4, codex hive parity, munder difflin release, multi-provider agents, codex lifecycle hook bridge, antigravity gemini agents",
+  "articleSection": "Story",
+  "inLanguage": "en-US",
+  "url": "https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/"
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://munderdiffl.in/" },
+    { "@type": "ListItem", "position": 2, "name": "Blog", "item": "https://munderdiffl.in/blog/" },
+    { "@type": "ListItem", "position": 3, "name": "Launching Munder Difflin v0.2.4", "item": "https://munderdiffl.in/blog/launching-munder-difflin-v0-2-4/" }
+  ]
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What's new in Munder Difflin v0.2.4?", "acceptedAnswer": { "@type": "Answer", "text": "v0.2.4's headline is full Codex hive parity: Codex now has a lifecycle-hook bridge — the same integration Antigravity has had since v0.2.3. It also ships a heartbeat re-engage fix so the GOD orchestrator re-engages on unread actionable inbox items, and god now opens the Terminal sidebar by default." } },
+    { "@type": "Question", "name": "What does Codex full hive parity mean?", "acceptedAnswer": { "@type": "Answer", "text": "In v0.2.3, Codex was inbox-capable but not fully hive-aware — it used an idle inbox-wake nudge for delivery. In v0.2.4, Codex has a real lifecycle-hook bridge that unifies agy and Codex dispatch. Both CLIs go through the same hook pipeline: live status, inbox drain, and outbox routing work identically for all three providers." } },
+    { "@type": "Question", "name": "Do I need an API key for Antigravity or Codex?", "acceptedAnswer": { "@type": "Answer", "text": "No. Antigravity runs on your Antigravity subscription (Gemini via the agy CLI). Codex runs on your OpenAI subscription (via the codex CLI). Munder Difflin drives the CLIs you already have — it doesn't replace them or require separate API credentials." } },
+    { "@type": "Question", "name": "Can I mix Claude Code, Antigravity, and Codex in the same hive?", "acceptedAnswer": { "@type": "Answer", "text": "Yes. All three are first-class hive participants. You can run Claude Code as the GOD orchestrator while Antigravity and Codex workers handle tasks — all sharing one inbox system, one shared memory, and one coordination layer." } }
+    
+  ]
+}
+</script>
+
+
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<nav id="nav">
+  <a class="brand" href="/blog/" aria-label="Munder Difflin Blog home">
+    <span class="brand-mark">MD</span>
+    <span class="brand-word">MUNDER DIFFLIN<span class="sep">/</span><span class="blog">BLOG</span></span>
+  </a>
+  <span class="spacer"></span>
+  <div class="links">
+    <a href="/blog/">Latest</a>
+    <a href="/blog/topics/">Topics</a>
+    <a href="/blog/about/">About</a>
+    <a href="https://munderdiffl.in">↗ Product</a>
+  </div>
+  <div class="nav-actions">
+    <a class="btn sm" href="https://munderdiffl.in/blog/feed.xml" aria-label="RSS feed">⤵ RSS</a>
+    <a class="btn sm primary" href="https://munderdiffl.in/#install">⤓ Download</a>
+  </div>
+</nav>
+
+<main id="main">
+
+<article>
+  <header class="post-head wrap">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="/blog/">Blog</a>
+      <span>/</span>
+      <a href="/blog/topics/story/">Story</a>
+    </nav>
+    <h1>Launching Munder Difflin v0.2.4</h1>
+    <p class="dek">Munder Difflin v0.2.4 gives Codex a full lifecycle-hook bridge — the same hive parity Antigravity has had since day one. Claude Code, Antigravity, and Codex are now equally first-class.</p>
+    <div class="byline">
+      <span class="av" aria-hidden="true">CG</span>
+      <strong>Chaitanya Giri</strong>
+      <span class="dot" aria-hidden="true">·</span>
+      <time datetime="2026-06-09">Jun 9, 2026</time>
+      <span class="dot" aria-hidden="true">·</span>
+      <span>3 min read</span>
+      <span class="tag kind">Story</span>
+    </div>
+  </header>
+
+  <div class="post-wrap wrap">
+    <div class="prose">
+      <div class="callout tldr"><span class="ic">TL;DR</span><p><strong>Munder Difflin v0.2.4</strong> closes the loop on multi-provider. Codex now has a <strong>full lifecycle-hook bridge</strong> — the same hive parity Antigravity has had since day one. Claude Code, Antigravity (Gemini · <code>agy</code>), and OpenAI Codex are now equally first-class. Three CLIs. One hive. No second-class citizens.</p></div>
+<p>Last month, we made the floor multi-provider. Claude Code agents were joined by Antigravity workers — Gemini running through the <code>agy</code> CLI — with a full hook bridge, shared mailboxes, and live status on the floor. Codex came along too, inbox-capable, able to receive and send hive mail.</p>
+<p>That was v0.2.3. It was big. It wasn’t done.</p>
+<p><strong>Today is v0.2.4. Today, it’s done.</strong></p>
+<h2 id="the-headline-codex-gets-a-real-bridge" tabindex="-1">The headline: Codex gets a real bridge <a class="anchor" href="#the-headline-codex-gets-a-real-bridge" aria-hidden="true">#</a></h2>
+<p>In v0.2.3, Codex was “non-hive-aware-but-inbox-capable.” That phrase was accurate and honest. It was also a polite way of saying Codex was the third provider but not quite the third <em>equal</em> provider. It used an idle inbox-wake nudge for delivery — a clever workaround, not a native hook path.</p>
+<p>That changes today.</p>
+<p><strong>v0.2.4 gives Codex a full lifecycle-hook bridge</strong> — the same integration Antigravity has had since day one. Codex and Antigravity now go through one unified dispatch path. Live status, inbox drain, outbox routing — all three providers, all working identically.</p>
+<p>Not “inbox-capable.” Not “mostly there.” <strong>Full hive parity.</strong></p>
+<p>This is the v0.2.4 headline. Everything else is polish on top of a now-complete foundation.</p>
+<h2 id="what-full-hive-parity-means" tabindex="-1">What full hive parity means <a class="anchor" href="#what-full-hive-parity-means" aria-hidden="true">#</a></h2>
+<p>When you add a Codex worker to the floor in v0.2.4:</p>
+<ul>
+<li>Its lifecycle events flow through the same hook bridge as Antigravity and Claude Code.</li>
+<li>Its status on the office floor updates live — running, thinking, idle — the same way.</li>
+<li>Mail from other agents lands in its inbox and drains when it’s idle — not via a nudge, but through the native hook path.</li>
+<li>Its outbox is drained by the provider-agnostic router, same as everyone else.</li>
+</ul>
+<p>The dispatch path is unified. <code>agy</code> and <code>codex</code> go through the same bridge code. The provider union is complete.</p>
+<p>You don’t have to think about which agent is which CLI. You brief the GOD orchestrator, it routes the work, the agents run. Whether the floor has a Claude Code researcher, an Antigravity writer, and a Codex builder — or any other combination — the hive layer underneath them is identical.</p>
+<h2 id="the-floor-is-multi-provider-for-real" tabindex="-1">The floor is multi-provider, for real <a class="anchor" href="#the-floor-is-multi-provider-for-real" aria-hidden="true">#</a></h2>
+<p>Here’s what the complete picture looks like.</p>
+<p><strong>Claude Code</strong> has always been the foundation. Full hook lifecycle, <code>--append-system-prompt</code>, settings integration. The hive was built for it. It remains the recommended choice for GOD — orchestrators benefit from Claude’s extended context and reasoning depth.</p>
+<p><strong>Antigravity</strong> (Gemini via <code>agy</code>) joined in v0.2.3 with a native hook bridge. Your Antigravity subscription. Gemini’s strengths. Full hive participant. No separate API key.</p>
+<p><strong>Codex</strong> (OpenAI via <code>codex</code>) was inbox-capable in v0.2.3. In v0.2.4, it is a full hive participant. Your OpenAI subscription. Codex’s coding focus. The same hook bridge as Antigravity.</p>
+<p>Three CLIs. Three subscriptions you already have. One floor. One memory. One GOD you talk to.</p>
+<p>Install the CLIs you want on your <code>PATH</code>. Add them as workers. The hive handles the rest.</p>
+<h2 id="also-in-v024" tabindex="-1">Also in v0.2.4 <a class="anchor" href="#also-in-v024" aria-hidden="true">#</a></h2>
+<p>Two smaller things that make the floor more reliable.</p>
+<p><strong>Heartbeat re-engage fix.</strong> The GOD orchestrator’s adaptive heartbeat now re-engages when there are unread actionable inbox items. Previously, the heartbeat would fire on schedule but could miss the case where god had mail waiting and nothing had triggered re-engagement. This is fixed: the heartbeat checks for and acts on unread items before cycling.</p>
+<p><strong>Terminal sidebar open by default.</strong> The GOD orchestrator now opens with the Terminal sidebar visible from the start. You’ve always been able to open it — now you don’t have to remember to.</p>
+<h2 id="the-full-picture" tabindex="-1">The full picture <a class="anchor" href="#the-full-picture" aria-hidden="true">#</a></h2>
+<p>Munder Difflin started as a harness for Claude Code agents. The idea was: give terminal agents a shared memory, mailboxes, a router, and one orchestrator you can talk to while the team keeps working.</p>
+<p>That idea has never been Claude-specific. The orchestrator works because it coordinates. The memory works because it’s shared. The routing works because it’s provider-agnostic.</p>
+<p>v0.2.4 is the release where the implementation catches up to the idea. Three CLIs, three subscriptions, one hive — and all three providers are genuinely, completely equal inside it.</p>
+<h2 id="get-v024" tabindex="-1">Get v0.2.4 <a class="anchor" href="#get-v024" aria-hidden="true">#</a></h2>
+<p>Munder Difflin is free, open source, and local-first on macOS, Windows, and Linux.</p>
+<p><a href="https://github.com/chaitanyagiri/munder-difflin/releases/latest">Download v0.2.4</a> — install the CLIs you want (<code>claude</code>, <code>agy</code>, and/or <code>codex</code>), add them to the floor, and run the multi-provider office you’ve been building toward.</p>
+<p>Full release notes are in the <a href="https://github.com/chaitanyagiri/munder-difflin/blob/main/CHANGELOG.md">CHANGELOG</a>. The technical walkthrough of every v0.2.4 change is in the <a href="/blog/munder-difflin-v0-2-4-feature-walkthrough/">feature guide</a>.</p>
+
+
+      
+      <section class="faq" aria-label="Frequently asked questions">
+        <h2 id="faq">FAQ</h2>
+        
+        <div class="qa">
+          <p class="q">What&#39;s new in Munder Difflin v0.2.4?</p>
+          <p class="a">v0.2.4&#39;s headline is full Codex hive parity: Codex now has a lifecycle-hook bridge — the same integration Antigravity has had since v0.2.3. It also ships a heartbeat re-engage fix so the GOD orchestrator re-engages on unread actionable inbox items, and god now opens the Terminal sidebar by default.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">What does Codex full hive parity mean?</p>
+          <p class="a">In v0.2.3, Codex was inbox-capable but not fully hive-aware — it used an idle inbox-wake nudge for delivery. In v0.2.4, Codex has a real lifecycle-hook bridge that unifies agy and Codex dispatch. Both CLIs go through the same hook pipeline: live status, inbox drain, and outbox routing work identically for all three providers.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Do I need an API key for Antigravity or Codex?</p>
+          <p class="a">No. Antigravity runs on your Antigravity subscription (Gemini via the agy CLI). Codex runs on your OpenAI subscription (via the codex CLI). Munder Difflin drives the CLIs you already have — it doesn&#39;t replace them or require separate API credentials.</p>
+        </div>
+        
+        <div class="qa">
+          <p class="q">Can I mix Claude Code, Antigravity, and Codex in the same hive?</p>
+          <p class="a">Yes. All three are first-class hive participants. You can run Claude Code as the GOD orchestrator while Antigravity and Codex workers handle tasks — all sharing one inbox system, one shared memory, and one coordination layer.</p>
+        </div>
+        
+      </section>
+      
+
+      
+      <hr />
+      <div class="share">
+        <span class="lbl">Tags</span>
+        <a class="tag" href="/blog/tags/story/">Story</a><a class="tag" href="/blog/tags/release/">Release</a><a class="tag" href="/blog/tags/multi-agent/">Multi-Agent</a><a class="tag" href="/blog/tags/claude-code/">Claude Code</a><a class="tag" href="/blog/tags/codex/">Codex</a><a class="tag" href="/blog/tags/open-source/">Open Source</a>
+      </div>
+      
+    </div>
+
+    
+    <aside class="toc-rail" aria-label="Table of contents">
+      <div class="tt">On this page</div>
+      <ol>
+        <li class="lvl-2"><a href="#the-headline-codex-gets-a-real-bridge">The headline: Codex gets a real bridge</a></li><li class="lvl-2"><a href="#what-full-hive-parity-means">What full hive parity means</a></li><li class="lvl-2"><a href="#the-floor-is-multi-provider-for-real">The floor is multi-provider, for real</a></li><li class="lvl-2"><a href="#also-in-v024">Also in v0.2.4</a></li><li class="lvl-2"><a href="#the-full-picture">The full picture</a></li><li class="lvl-2"><a href="#get-v024">Get v0.2.4</a></li>
+      </ol>
+    </aside>
+    
+  </div>
+
+  <footer class="post-foot wrap"><div class="prevnext">
+      <a class="pn prev" href="/blog/munder-difflin-v0-2-4-feature-walkthrough/"><span class="k">← Older</span><span class="t">Munder Difflin v0.2.4 Feature Walkthrough</span></a>
+      <span></span>
+    </div>
+    <section class="related">
+      <h2>Related in Story</h2>
+      <div class="post-grid">
+        <article class="card">
+  <a class="thumb t-story" href="/blog/launching-munder-difflin-v0-2-0/" aria-hidden="true" tabindex="-1">
+    <span>STORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-07">Jun 7, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>7 min</span>
+    </div>
+    <h3><a href="/blog/launching-munder-difflin-v0-2-0/">Launching Munder Difflin v0.2.0</a></h3>
+    <p class="dek">Munder Difflin v0.2.0 is here: a Command Center overhaul, per-agent token budgets, live OpenTelemetry observability, a circuit breaker, durable SQLite persistence, and a big round of community fixes.</p>
+    <div class="foot">
+      <span class="tag kind">Story</span>
+      <a class="more" href="/blog/launching-munder-difflin-v0-2-0/" aria-label="Read: Launching Munder Difflin v0.2.0">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
+  <a class="thumb t-story" href="/blog/one-prompt-automated-pr-review/" aria-hidden="true" tabindex="-1">
+    <span>STORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-07">Jun 7, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>6 min</span>
+    </div>
+    <h3><a href="/blog/one-prompt-automated-pr-review/">One Prompt, Five PR Reviews, and an Hourly Automation — A Dogfooding Story</a></h3>
+    <p class="dek">How a single prompt to the Munder Difflin god agent reviewed all open PRs and set up a recurring hourly PR reviewer — while the repo was blowing up with 400+ stars.</p>
+    <div class="foot">
+      <span class="tag kind">Story</span>
+      <a class="more" href="/blog/one-prompt-automated-pr-review/" aria-label="Read: One Prompt, Five PR Reviews, and an Hourly Automation — A Dogfooding Story">Read →</a>
+    </div>
+  </div>
+</article>
+<article class="card">
+  <a class="thumb t-story" href="/blog/the-office-parody-behind-munder-difflin/" aria-hidden="true" tabindex="-1">
+    <span>STORY</span>
+  </a>
+  <div class="body">
+    <div class="meta">
+      <time datetime="2026-06-04">Jun 4, 2026</time>
+      <span class="dot" aria-hidden="true"></span>
+      <span>4 min</span>
+    </div>
+    <h3><a href="/blog/the-office-parody-behind-munder-difflin/">The Office Parody Behind Munder Difflin (and Why It Helps)</a></h3>
+    <p class="dek">Why Munder Difflin is a loving parody of The Office — and how the office metaphor makes a hive of AI agents genuinely easier to understand and trust.</p>
+    <div class="foot">
+      <span class="tag kind">Story</span>
+      <a class="more" href="/blog/the-office-parody-behind-munder-difflin/" aria-label="Read: The Office Parody Behind Munder Difflin (and Why It Helps)">Read →</a>
+    </div>
+  </div>
+</article>
+
+      </div>
+    </section>
+    
+  </footer>
+</article>
+
+</main>
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <a class="foot-brand brand" href="/blog/">
+        <span class="brand-mark">MD</span>
+        <span class="brand-word">MUNDER DIFFLIN<span class="sep">/</span><span class="blog">BLOG</span></span>
+      </a>
+      <div class="foot-links">
+        <a href="/blog/">Latest</a>
+        <a href="/blog/topics/">Topics</a>
+        <a href="/blog/about/">About</a>
+        <a href="https://munderdiffl.in/blog/feed.xml">RSS</a>
+        <a href="https://github.com/chaitanyagiri/munder-difflin">GitHub</a>
+        <a href="https://munderdiffl.in">munderdiffl.in ↗</a>
+      </div>
+    </div>
+    <div class="foot-meta">
+      © 2026 Munder Difflin · Local-first · MIT-licensed ·
+      Built on <a href="https://munderdiffl.in">Electron, React, Pixi.js, xterm.js &amp; node-pty</a>.
+      Run an office of agents while you sleep.
+    </div>
+  </div>
+</footer>
+
+<script>
+  // sticky-nav border on scroll
+  (function () {
+    var nav = document.getElementById('nav');
+    if (!nav) return;
+    var onScroll = function () { nav.classList.toggle('scrolled', window.scrollY > 8); };
+    onScroll(); window.addEventListener('scroll', onScroll, { passive: true });
+  })();
+</script>
+
+</body>
+</html>
