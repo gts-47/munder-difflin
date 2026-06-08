@@ -169,6 +169,10 @@ interface State {
    *  composer) doesn't eat what the user was typing. */
   drafts: Record<string, string>;
   setDraft: (agentId: string, text: string) => void;
+  /** Mirror of config.freeflowEnabled so the composer can show/hide the Free Flow
+   *  mic button reactively (set by App on config load and by Settings on save). */
+  freeflowEnabled: boolean;
+  setFreeflowEnabled: (on: boolean) => void;
   /** Park a message for an agent. Returns nothing; the flush loop delivers it. */
   enqueueMessage: (agentId: string, text: string, meta?: { slack?: { channel: string; thread_ts: string } }) => void;
   /** Drop a single queued message (user removed it, or it was just delivered). */
@@ -458,6 +462,8 @@ export const useStore = create<State>((set) => ({
   drafts: {},
   setDraft: (agentId, text) =>
     set((s) => ({ drafts: { ...s.drafts, [agentId]: text } })),
+  freeflowEnabled: false,
+  setFreeflowEnabled: (on) => set({ freeflowEnabled: on }),
   enqueueMessage: (agentId, text, meta) =>
     set((s) => {
       const trimmed = text.trim();

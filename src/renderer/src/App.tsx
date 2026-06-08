@@ -20,6 +20,7 @@ import { acquireTerminal } from '@/components/terminalPool';
 import { FullscreenTerminal } from '@/components/FullscreenTerminal';
 import { TaskDetailOverlay } from '@/components/TaskDetailOverlay';
 import { FullscreenFileEditor } from '@/components/FullscreenFileEditor';
+import { freeflowRecorder } from '@/freeflow/recorder';
 import brandLogo from '@brand/logo.png?url';
 
 // Injected at build time from package.json (see electron.vite.config.ts).
@@ -46,9 +47,24 @@ export function App() {
   // Initial config load
   useEffect(() => {
     let cancelled = false;
-    window.cth.getConfig().then(c => { if (!cancelled) setConfig(c); });
+    window.cth.getConfig().then(c => {
+      if (cancelled) return;
+      setConfig(c);
+      // Mirror the Free Flow flag into the store so the composer mic button shows
+      // only when enabled (Settings keeps this in sync on save).
+      useStore.getState().setFreeflowEnabled(!!c.freeflowEnabled);
+    });
     return () => { cancelled = true; };
   }, []);
+
+  // Free Flow entry point B — the global push-to-talk hotkey. Main fires this
+  // (only while Free Flow is enabled); toggle dictation for whichever agent the
+  // user is currently viewing (fullscreen tab wins, else the selected agent).
+  useEffect(() => window.cth.onFreeflowHotkey(() => {
+    const s = useStore.getState();
+    const target = s.fullscreenAgentId ?? s.selectedId;
+    if (target) freeflowRecorder.toggle(target);
+  }), []);
 
   // Quit warning subscription
   useEffect(() => window.cth.onCloseRequested((info) => setQuitWarn(info)), []);
