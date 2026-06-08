@@ -531,7 +531,6 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
               )}
             </div>
             {isClaudeProvider(inferAgentProvider(a.command, a.provider)) ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-
               <Select
                 value={a.model ?? ''}
                 disabled={restarting === a.id}

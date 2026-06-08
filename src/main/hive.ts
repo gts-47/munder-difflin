@@ -174,7 +174,7 @@ export class HiveManager {
    */
   constructor(
     private getHome: () => string | null,
-    private emit?: (channel: string, payload: unknown) => void
+    private emit?: (channel: string, payload: unknown) => boolean | void
   ) {}
 
   private routerTimer: NodeJS.Timeout | null = null;
@@ -633,17 +633,21 @@ export class HiveManager {
         }, godId);
         continue;
       }
-      // A provider with no way to drain its inbox (a hookless custom command)
-      // would let direct mail rot unread — bounce it to the god to relay as a
-      // live prompt. Claude (Stop hook), Antigravity (agy-hook Stop→drain bridge)
-      // and Codex (renderer idle inbox-wake nudge) all drain their inbox, so they
-      // receive directly into their inbox/. God is exempt (the bounce target).
+      // A provider that can't drain its own inbox (a hookless custom command)
+      // would let direct mail rot unread. Claude (Stop hook), Antigravity
+      // (agy-hook Stop→drain bridge) and Codex (renderer idle inbox-wake nudge)
+      // all drain their inbox, so they receive directly into their inbox/. For a
+      // provider that can't, try a terminal work-order handoff to its REPL (#53);
+      // if the renderer is unavailable, bounce to god to relay. God is exempt
+      // (the bounce target).
       if (t !== godId && !canReceiveInbox(reg.agents[t]?.provider)) {
-        this.deliver({
-          ...msg,
-          to: godId,
-          subject: `[bounced — "${t}" runs ${reg.agents[t]?.provider ?? 'a hookless CLI'} and can't drain its hive inbox; relay this to it] ${msg.subject}`
-        }, godId);
+        if (!this.emitTerminalHandoff(msg, t)) {
+          this.deliver({
+            ...msg,
+            to: godId,
+            subject: `[undeliverable — "${t}" runs ${reg.agents[t]?.provider ?? 'a hookless CLI'} and the terminal handoff failed (renderer unavailable); relay this to it] ${msg.subject}`
+          }, godId);
+        }
         continue;
       }
       this.deliver(msg, t);
@@ -676,6 +680,31 @@ export class HiveManager {
       // human (now routed to the god proxy). Cosmetic only — no queue behind it.
       needsHuman: msg.to === 'human'
     });
+  }
+
+  /** Non-Claude providers cannot drain hive inbox; hand direct mail to the
+   *  renderer so it can queue a terminal work order for the target PTY. */
+  private emitTerminalHandoff(msg: HiveMessage, targetId: string): boolean {
+    const delivered = this.emit?.('hive:terminalHandoff', {
+      id: msg.id,
+      from: msg.from,
+      to: targetId,
+      act: msg.act,
+      subject: msg.subject,
+      body: msg.body,
+      requiresReply: msg.requires_reply,
+      createdAt: msg.created_at
+    }) === true;
+    this.appendLog({
+      kind: 'terminal-handoff',
+      from: msg.from,
+      to: targetId,
+      act: msg.act,
+      subject: msg.subject,
+      id: msg.id,
+      delivered
+    });
+    return delivered;
   }
 
   // — router: drain outboxes → inboxes —

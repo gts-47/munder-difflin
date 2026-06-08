@@ -83,6 +83,43 @@ function submitToPty(ptyId: string, text: string, settleMs = 250): Promise<void>
   return next;
 }
 
+/** Wrap a user message as an enrich task for the assistant. The assistant's
+ *  system prompt has the full instructions; this just frames the one task. */
+function enrichTaskPrompt(text: string): string {
+  return [
+    `ENRICH TASK: ${text}`,
+    '',
+    '(Identify the relevant project, cd in, gather READ-ONLY context, then send the improved,',
+    'self-contained prompt to Michael via an outbox message with "to":"god". Do not do the task yourself.)'
+  ].join('\n');
+}
+
+function terminalWorkOrderPrompt(msg: {
+  id: string;
+  from: string;
+  act: string;
+  subject: string;
+  body: string;
+  requiresReply: boolean;
+  createdAt: string;
+}): string {
+  return [
+    'WORK ORDER FROM HIVE',
+    `Message: ${msg.id}`,
+    `From: ${msg.from}`,
+    `Subject: ${msg.subject}`,
+    `Act: ${msg.act}${msg.requiresReply ? ' (reply expected)' : ''}`,
+    `Issued: ${msg.createdAt}`,
+    '',
+    msg.body,
+    '',
+    'Notes:',
+    '- This arrived through your terminal because this provider does not support hive inbox.',
+    '- Work in your current cwd.',
+    '- When done, report changes, validation, blockers, and next step in this terminal.'
+  ].join('\n');
+}
+
 /** Tool name → where the avatar walks + what it carries. */
 const TOOL_STATION: Record<string, { station: StationKind; carry?: ToolKind }> = {
   Read: { station: 'shelf', carry: 'Read' },
@@ -139,6 +176,9 @@ export function useHive(config: HarnessConfig | null): void {
   // must leave the agent alone — set while its boot sequence is typing so nothing
   // collides with /remote-control + the orientation prompt.
   const bootGraceUntil = useRef<Record<string, number>>({});
+  const seenTerminalHandoffs = useRef<Set<string>>(new Set());
+  // Reactive so the assistant bootstrap (effect #1b) re-runs once Michael is ready.
+  const godStatus = useStore((s) => s.godStatus);
   // #5C/#7C.4 — latest circuit-breaker level per agent. When 'constrained'/
   // 'stopped' the avatar is pinned to 'looping' and hook events must NOT flip it
   // back to 'working' (the flicker the spec calls out); only a genuine Stop clears it.
@@ -350,6 +390,34 @@ export function useHive(config: HarnessConfig | null): void {
       useStore.getState().updateAgent(agentId, { contextTokens: tokens, contextLimit: limit, progress });
     });
   }, []);
+
+  // 2e) Non-Claude providers cannot drain hive inbox. Direct hive mail to them
+  //     arrives here as a terminal work order and is queued through the same
+  //     idle-only PTY drain as human-composed messages.
+  useEffect(() => {
+    if (!config?.onboardingComplete) return;
+    return window.cth.onHiveTerminalHandoff((msg) => {
+      if (seenTerminalHandoffs.current.has(msg.id)) return;
+      const { agents, enqueueMessage, messageQueues } = useStore.getState();
+      const target = agents.find((a) => a.id === msg.to);
+      if (target?.ptyId) {
+        const marker = `Message: ${msg.id}`;
+        if ((messageQueues[target.id] ?? []).some((queued) => queued.text.includes(marker))) return;
+        seenTerminalHandoffs.current.add(msg.id);
+        enqueueMessage(target.id, terminalWorkOrderPrompt(msg));
+        return;
+      }
+      seenTerminalHandoffs.current.add(msg.id);
+      enqueueMessage(
+        GOD_ID,
+        [
+          `Terminal handoff failed for ${msg.to}: ${msg.subject}`,
+          '',
+          `Message ${msg.id} from ${msg.from} could not be queued because ${msg.to} has no live PTY. Route it manually or respawn the agent.`
+        ].join('\n')
+      );
+    });
+  }, [config?.onboardingComplete]);
 
   // 3) Wake idle agents holding unread inbox messages. The assistant is
   //    send-only (it never receives inbox mail), so it's excluded.
