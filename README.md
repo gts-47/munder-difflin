@@ -4,7 +4,8 @@
 
 # Munder Difflin
 
-**Local multi-agent harness for [Claude Code](https://claude.com/claude-code).**
+**Local multi-agent harness for [Claude Code](https://claude.com/claude-code),
+Antigravity (Gemini), and OpenAI Codex.**
 Autonomous agents that message, route, and remember — coordinated by a **GOD** orchestrator
 you talk to, and visualized as avatars at work on a shared office floor.
 
@@ -36,19 +37,19 @@ you talk to, and visualized as avatars at work on a shared office floor.
 
 > [!NOTE]
 > **The world's best agents. The world's worst paper company.**
-> Munder Difflin takes the `claude` CLI sessions you already run in your terminal and turns them
+> Munder Difflin takes the terminal-agent CLIs you already run — `claude`, `agy`, and `codex` — and turns them
 > into a self-coordinating team: each agent gets long-term memory, a mailbox, and a desk on a 2D
 > office floor — and a **GOD orchestrator agent** routes work between them while you watch.
 
 ## What it is
 
-Munder Difflin is a desktop app that wraps **real Claude Code terminals** as fully-capable agents,
+Munder Difflin is a desktop app that wraps **real terminal-agent CLIs** as fully-capable agents,
 wires them into a **hive mind**, and puts a **GOD orchestration agent** in charge — the one agent
 *you* talk to in order to get things done. Under the hood it runs the **fastest memory layer in the
 world** so every agent remembers what it learns and recalls it instantly.
 
-- **Every terminal is an agent.** Each `claude` session runs as a real process in a pseudo-terminal
-  (`node-pty`), byte-for-byte authentic, rendered with xterm.js.
+- **Every terminal is an agent.** Each `claude`, `agy`, `codex`, or custom session runs as a real
+  process in a pseudo-terminal (`node-pty`), byte-for-byte authentic, rendered with xterm.js.
 - **Every agent is an avatar.** Sessions appear as characters on a Pixi.js office floor — they walk
   to stations as they work, and envelopes fly desk-to-desk when they message each other.
 - **The hive coordinates them.** Agents read their memory and drain a mailbox; the router moves
@@ -69,14 +70,14 @@ world** so every agent remembers what it learns and recalls it instantly.
               ▼                         ▼                         ▼
         ┌───────────┐            ┌───────────┐            ┌───────────┐
         │  agent A  │  message   │  agent B  │  message   │  agent C  │
-        │  claude   │ ─────────► │  claude   │ ─────────► │  claude   │
+        │ provider  │ ─────────► │ provider  │ ─────────► │ provider  │
         │  + memory │            │  + memory │            │  + memory │
         └───────────┘            └───────────┘            └───────────┘
               └──────── shared hive: memory · mailbox · blackboard · log ───────┘
 ```
 
-1. **You spawn agents** — each is a normal `claude` process with its own working directory,
-   identity, and hook lifecycle.
+1. **You spawn agents** — each is a normal terminal process (`claude`, `agy`, `codex`, or custom)
+   with its own working directory, identity, and provider-specific lifecycle.
 2. **Agents collaborate through the hive** — a local git repo of plain files. They write to their own
    `outbox/`; the harness's router delivers into recipients' `inbox/`. No agent ever touches git
    (single-committer design avoids `index.lock` corruption).
@@ -93,7 +94,8 @@ terminal/event plane, and [`DESIGN.md`](./DESIGN.md) for the visual system.
 
 | Area | What works today |
 |---|---|
-| **Real terminals** | Spawn Claude Code, Codex, or a custom command in a `node-pty` PTY. Full read/write/resize/kill, live streaming over IPC, multi-agent. |
+| **Real terminals** | Spawn Claude Code, Antigravity (`agy` / Gemini), OpenAI Codex, or a custom command in a `node-pty` PTY. Full read/write/resize/kill, live streaming over IPC, multi-agent. |
+| **Multi-provider hive** | Claude Code, Antigravity, and Codex workers can all participate in the same hive. Claude uses native hooks; Antigravity gets a native `agy-hook` bridge; Codex receives the protocol as its initial prompt and participates through inbox/outbox routing. |
 | **The hive** | On-disk multi-agent layer: per-agent identity + long-term memory, atomic-file mailboxes, a shared blackboard, append-only event log, single-committer git. |
 | **GOD orchestrator** | An always-on supervisor agent that adjudicates traffic, routes tasks, scribes the blackboard, and escalates only critical items to you. |
 | **Memory layer** | Markdown-first long-term memory per agent, mined into a shared semantic palace for instant recall; searchable from the UI. Degrades gracefully when the index isn't installed. |
@@ -103,7 +105,7 @@ terminal/event plane, and [`DESIGN.md`](./DESIGN.md) for the visual system.
 | **Approvals & memory panels** | Human-in-the-loop approval queue for escalations; a memory search panel over the shared palace. |
 | **Onboarding wizard** | First-run setup: harness home, registered repos, default command, auto-mode. |
 | **Design system** | Fully tokenized SNES / Animal-Crossing aesthetic — pixel panels, buttons, badges, hand-drawn icons. See [`DESIGN.md`](./DESIGN.md). |
-| **Command Center** | Michael's control surface, overhauled in v0.2.0: Terminal, Floor (roster + dispatch + per-agent model selector + live fleet monitoring), Memory (MemPalace + text search + memory graph), Activity (log + board + real token telemetry + observability + CI watcher), Tasks (kanban board with dependencies + status tracking), Schedules (recurring missions + heartbeat). |
+| **Command Center** | Michael's control surface: Terminal, Floor (roster + dispatch + per-agent model selector + live fleet monitoring), Memory (MemPalace + text search + memory graph), Activity (log + board + real token telemetry + observability + CI watcher), Tasks (kanban board with dependencies + status tracking), and a dedicated Schedules tab (recurring missions + adaptive heartbeat). |
 | **Per-agent git worktrees** | 'Git isolation' toggle in Add Agent auto-provisions a dedicated worktree per agent on spawn and tears it down on kill — agents never collide on branches. |
 | **Token & cost telemetry** | Activity tab reads `~/.claude/projects/` JSONL transcripts and surfaces real token counts + estimated USD cost per agent per session, backed by a durable cost ledger that survives restarts. |
 | **Per-agent token budgets** | Set a token budget per agent and watch live fleet monitoring track consumption across the whole roster — paired with the cost/runaway circuit breaker to keep spend in check. |
@@ -116,7 +118,9 @@ terminal/event plane, and [`DESIGN.md`](./DESIGN.md) for the visual system.
 | **Configurable home folder** | Point the hive/memory home at any folder, with a safe move that relocates existing state without losing it. |
 | **Restore team** | One-click "Restore team" rebuilds last session's workers after a harness restart — no more re-adding agents by hand. |
 | **Task kanban** | Dependency-aware kanban board in the Command Center Tasks tab — assign tasks to agents, track status across todo/doing/blocked/done, wire dependencies so work starts in order. |
-| **Scheduled missions & heartbeat** | Recurring auto-dispatch missions with label, interval, target agent, and body — plus a scheduler heartbeat that re-engages the floor when it goes quiet. Delete scheduled missions inline, and see last/next-fired times in the Schedules tab. |
+| **Scheduled missions & heartbeat** | Recurring auto-dispatch missions with label, interval, target agent, and body — plus a scheduler heartbeat that re-engages the floor when it goes quiet. Missions now live in their own Schedules tab with last/next-fired times. |
+| **Terminal work-order handoff** | Providers without an inbox-drain hook receive hive mail as a `WORK ORDER FROM HIVE` typed into their terminal; if the renderer is unavailable, the message bounces to the GOD agent instead of disappearing. |
+| **Slack/webhook ingress** | Slack and generic webhook ingress expose local endpoints through tunnelmole, so POSTs pass straight through and failed tunnels surface a real error instead of a silent broken URL. |
 | **GitHub ingestion** | Pull open issues from any registered repo via the `gh` CLI and assign them to agents with one click from the Command Center. |
 | **CI status watcher** | Live pass/fail/in-progress status for GitHub Actions runs, visible in the Activity tab for every registered repo. |
 | **Threaded chat** | Every hive message is grouped by conversation and rendered as a reply chain in each agent's Messages tab — readable, replyable, auditable. |
@@ -125,23 +129,22 @@ terminal/event plane, and [`DESIGN.md`](./DESIGN.md) for the visual system.
 | **Avatar states** | Avatars reflect real work — including new v0.2.0 states for *compacting* (context compaction) and *looping* (circuit-breaker intervention), on top of crisper HiDPI floor text and high-contrast speech bubbles. |
 
 > [!NOTE]
-> **Status: v0.2.0 — observability, control, and durability.** This release brings a Command Center overhaul, per-agent token budgets with live fleet monitoring, full observability (live OpenTelemetry collector, per-model cost, fleet grid + per-agent tool-span waterfall), an agent-card context-window gauge, a cost/runaway circuit breaker (steer → constrain → stop) with a scheduler heartbeat, a human-in-the-loop gate plus mid-run steer and graceful stop via hook returns, SQLite-backed durable persistence (window bounds + history) and a durable cost ledger, the MemoryReflector for memory condensation, a configurable hive/memory home folder with safe move, one-click "Restore team" after restart, a delete button for scheduled missions, new *compacting* and *looping* avatar states, terminal legibility/contrast + HiDPI fixes, and a Windows fix to keep the hive alive behind the lock screen. All of v0.1.x — the hook plane, office floor, hive coordination, git isolation, token telemetry, task kanban, scheduled missions, GitHub/CI integration, threaded conversations, desktop notifications, agent archival, a Slack→queue bridge, and native human-in-the-loop approvals — remains functional and shipping. macOS (signed), Windows, and Linux builds are available on the releases page.
+> **Status: v0.2.3 — multi-provider floor.** Claude Code, Antigravity (Gemini via `agy`), and OpenAI Codex can now work as first-class hive participants. Antigravity gets a native `agy-hook` bridge; Codex receives the hive protocol as its initial prompt and can read inbox mail / write outbox mail through provider-agnostic routing; hookless providers get terminal work-order handoff. v0.2.3 also moves recurring missions into a dedicated Schedules tab and replaces the Slack/webhook localtunnel ingress with tunnelmole. Everything from v0.2.0-v0.2.2 — observability, circuit breaker, durable persistence, context gauges, Command Center, task kanban, GitHub/CI integration, threaded conversations, desktop notifications, and agent archival — remains functional and shipping. macOS (signed), Windows, and Linux builds are available on the releases page.
 
 ## Getting started
 
 ### Prerequisites
 
-- **macOS** (macOS-first; Windows/Linux untested).
+- **macOS, Windows, or Linux**.
 - **Node.js 18+** and npm.
 - A **C/C++ toolchain** for `node-pty`'s native addon — on macOS, install Xcode Command Line Tools:
   ```bash
   xcode-select --install
   ```
-- **[Claude Code](https://claude.com/claude-code)** on your `PATH` so agents can run `claude`
-  (the default command). Add Agent also includes a Codex preset that runs `codex`
-  without Claude-only flags; initial Codex support is terminal spawning with shared
-  workspace/env, not Claude telemetry, hook parity, or hive inbox delivery (direct
-  hive mail to Codex/custom agents bounces to the god agent).
+- At least one supported terminal-agent CLI on your `PATH`: **[Claude Code](https://claude.com/claude-code)**
+  (`claude`, the default command), **Antigravity** (`agy`, Gemini), or **OpenAI Codex** (`codex`).
+  Claude uses native hooks, Antigravity uses the `agy-hook` bridge, and Codex participates through
+  initial-prompt protocol injection plus inbox/outbox routing.
 - *Optional:* the semantic memory index for instant cross-session recall (the app works without it —
   markdown memory still functions).
 
@@ -190,7 +193,7 @@ Two data planes feed one renderer:
                 │ hook payloads          │ stdin / stdout
                 └─────────┬──────────────┘
                    ┌──────┴──────────────┐
-                   │  claude (or any cmd)│
+                   │ claude / agy / codex│
                    └─────────────────────┘
 ```
 
@@ -198,10 +201,10 @@ Two data planes feed one renderer:
   process and streams output over per-id IPC (`pty:data:<id>`). The renderer talks only through a
   typed `window.cth` bridge ([`src/preload/index.ts`](./src/preload/index.ts)), which also exposes
   sandboxed filesystem and git helpers.
-- **Hive / event plane.** `hive.ts` is the on-disk multi-agent layer; `hooks.ts` runs a Unix-socket
-  server that the per-agent `cth-hook` shim POSTs Claude Code hook payloads to (`PreToolUse`,
-  `PostToolUse`, `Stop`, …); `memory.ts` wraps the semantic memory CLI. The router delivers messages,
-  the GOD agent adjudicates, and a `Stop`-loop keeps idle agents draining their inboxes.
+- **Hive / event plane.** `hive.ts` is the on-disk multi-agent layer; `hooks.ts` runs the hook
+  server that provider bridges POST lifecycle payloads to (`cth-hook` for Claude Code, `agy-hook`
+  for Antigravity). `memory.ts` wraps the semantic memory CLI. The router delivers messages, drains
+  provider outboxes, the GOD agent adjudicates, and idle/inbox wakeups keep workers draining mail.
 
 ## Project structure
 
@@ -211,7 +214,7 @@ src/
     index.ts                 window, IPC handlers, quit guard
     pty.ts                   node-pty manager (spawn/write/resize/kill/stream)
     hive.ts                  on-disk multi-agent layer (memory, mailboxes, router)
-    hooks.ts                 UDS hook server + cth-hook shim + Stop-loop
+    hooks.ts                 hook server + provider hook shims (`cth-hook`, `agy-hook`)
     memory.ts                semantic memory layer (CLI wrapper, degrade-to-noop)
     config.ts                harness config persistence + home setup
     transcript.ts            reads ~/.claude/projects/ JSONL transcripts for real token/cost telemetry
@@ -221,7 +224,6 @@ src/
     reflect.ts               MemoryReflector — memory condensation
     db.ts                    SQLite durable store (window bounds + history) + durable cost ledger
     github.ts                GitHub issue + CI run ingestion via the gh CLI
-    assistant.ts             headless Sonnet enrichment pipeline (Dwight)
     shellEnv.ts              resolve PATH and shell env for child processes
     fs.ts / git.ts           sandboxed filesystem + git bridges
   preload/                   contextBridge → typed window.cth API
@@ -233,7 +235,7 @@ src/
     ToolWaterfall,           per-agent tool-span waterfall for the observability view
     TasksKanban,             dependency-aware kanban board (Tasks tab)
     ThreadsPanel,            hive message conversation viewer (Messages tab)
-    MessageQueueComposer,    park messages for a busy agent + enrich toggle
+    MessageQueueComposer,    park messages for a busy agent
     scene/office/            Pixi office floor: OfficeFloor, Character, Camera, cast, pathfinding, …
     store/ · hooks/          zustand store, event loop, PTY parser, typewriter
     assets/                  tilesets, maps, character sheets (see ATTRIBUTION.md)
@@ -252,17 +254,20 @@ chrome. The 15 avatars are the cast of *The Office*, differentiated by hair/skin
 
 ## Roadmap
 
-Shipped in **v0.2.0**:
+Shipped in **v0.2.0-v0.2.3**:
 
 - [x] **Heartbeat** — scheduler heartbeat that re-engages the floor when it goes quiet, with last/next-fired times surfaced in the Schedules tab.
 - [x] **Memory reflection** — the MemoryReflector summarizes and bounds per-agent memory over time to prevent unbounded growth.
 - [x] **Persistence** — SQLite-backed durable store for window bounds + history across restarts, plus a durable cost ledger and persisted session IDs.
 - [x] **Hook-driven avatars** — broadened hook→station coverage and caged the synthetic demo loop, with new *compacting* and *looping* avatar states.
+- [x] **Multi-provider floor** — Claude Code, Antigravity (`agy` / Gemini), and OpenAI Codex can participate in the same hive.
+- [x] **Dedicated Schedules tab** — recurring missions and the adaptive heartbeat have their own Command Center tab.
+- [x] **Tunnelmole ingress** — Slack and generic webhook public URLs use tunnelmole instead of localtunnel.
 
 Next up:
 
-- [ ] **Chat integrations** — Slack and Telegram bridges that pipe a channel straight into Michael's queue (and route his replies back out), so you can run the floor from your phone.
-- [ ] **Pluggable agent CLIs** — run the harness over coding-agent CLIs beyond Claude Code: Claw Code, opencode, and Codex CLI.
+- [ ] **More chat integrations** — Telegram and richer chat bridges that pipe a channel straight into Michael's queue (and route his replies back out), so you can run the floor from your phone.
+- [ ] **More provider CLIs** — extend the provider layer beyond Claude Code, Antigravity, and Codex.
 - [ ] **Realtime Michael** — a low-latency realtime LLM channel for quick, snappy back-and-forth with the orchestrator, alongside the async terminal.
 - [ ] **Fuller avatar coverage** — push the remaining station visits and tool-bubbles to be driven 100% by real Claude Code hook events.
 - [ ] **Durable layout & command history** — extend persistence to agent layout and per-session command history.
