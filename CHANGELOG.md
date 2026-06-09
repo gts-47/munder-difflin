@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.5] — 2026-06-10
+
+A reliability + reach patch: a Windows-terminal regression fix, an agent-lifecycle
+cleanup that ends the breaker inbox-flood, Slack requests that actually reply with
+substance, a delegate toggle, six new tutorials/blogs, and an enriched landing diagram.
+
+### Added
+- **Delegate-to-agents toggle.** A toggle beside the god orchestrator's message composer prepends a delegation instruction so a request fans out to available agents (and is handled one-by-one if none are free). God-only, default off.
+- **AUTONOMOUS REQUEST PROTOCOL for Slack-origin requests.** Inbound Slack requests now run fully autonomously: god routes the request to the most-relevant agent, that agent does the work and **posts its substantive result back into the Slack thread itself**, then reports to god. It pauses only for high-severity actions (pushing to main, spawning infrastructure/paid services, deleting files it didn't create), and any decision it needs is asked as a numbered-options reply in the thread and correlated back by `thread_ts`.
+- **Six new tutorials & blog posts** — webhook setup, the full Slack setup, deploying an automated PR-reviewer agent, deploying a blog-writer agent, why CLI agents are so powerful (and how the hive cuts token use), and why a mixed-capability swarm beats a clone army.
+- **Enriched "how it works" landing diagram** — Slack / Webhook / Schedule triggers feeding the orchestrator, plus a band showing each agent in its own isolated local git worktree.
+
+### Fixed
+- **Windows agent terminals no longer die on Program-Files installs (#55).** `cmd.exe` is now invoked with a properly double-quoted command line (`/d /s /c`), so a Claude/node path containing a space (e.g. `C:\Program Files\…`) launches instead of splitting on the space.
+- **Orphaned-agent lifecycle cluster (#56/#57/#58).** A stale agent entry with no live terminal no longer (a) re-writes a frozen cost-ledger row every ~30s, (b) trips the circuit breaker into an unclearable inbox-flood to the orchestrator, or (c) lingers un-archived — a startup migration archives no-PTY entries and the breaker now skips assistant/orphaned shells.
+- **Slack replies are real answers, not empty confirmations.** Worker agents post the actual outcome into the thread; the orchestrator's auto-summary is now a fallback that never posts a bare "✅" with no content and skips threads already answered directly.
+
+### Removed
+- **Reverted the unfinished compact-protocol feature** — it was only half-wired (main-side committed, renderer-side unfinished) and broke the web typecheck. It will return fully wired in a later release.
+
 ## [0.2.4] — 2026-06-09
 
 A multi-provider patch: Codex graduates to **full hive parity** via a native
