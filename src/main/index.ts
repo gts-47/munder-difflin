@@ -428,7 +428,14 @@ function runBreakerBeat(progressWindowMs: number): void {
   for (const [id, a] of Object.entries(reg.agents)) {
     if (a.archived) continue;
     const sample = usageProvider.getAgentUsage(id);
-    if (sample) hive.appendCostLedger(sample); // ledger covers everyone incl. god
+    // #56: only append a ledger row for a LIVE session sample. A dead/orphaned
+    // agent with a frozen transcript still yields a sample via the transcript
+    // fallback, but with an EMPTY sessionId (aggregateLive returns null → no live
+    // OTel session). Appending it every ~30s rewrote the identical row forever
+    // (2,417 dupes observed). A truthy sessionId is set only by a live session
+    // (aggregateLive picks the most-recent live session id), so this gates on
+    // "is there a live session" without changing any live-agent behavior.
+    if (sample?.sessionId) hive.appendCostLedger(sample); // ledger covers everyone incl. god
     if (id === reg.godId) continue;            // breaker skips god
     inputs.push({ agentId: id, sample, progressing: now - lastCoordinationAt(id) < progressWindowMs });
   }
