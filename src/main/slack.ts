@@ -27,6 +27,24 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // `openTunnel()` instead — Rollup preserves dynamic import() in CJS output, which
 // can load ESM. Do not hoist this back to a top-level import.
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { shouldTrigger: _shouldTrigger, ActivatedThreads: _ActivatedThreads } =
+  require('./slack-trigger.cjs') as {
+    shouldTrigger: (
+      ev: SlackPayload['event'],
+      botUserId: string | null,
+      channelId: string | undefined,
+      activatedThreads: _IActivatedThreads
+    ) => { trigger: boolean; text: string };
+    ActivatedThreads: new (maxSize?: number) => _IActivatedThreads;
+  };
+
+interface _IActivatedThreads {
+  add(threadTs: string): void;
+  has(threadTs: string): boolean;
+  readonly size: number;
+}
+
 export interface SlackWebhookServerOptions {
   /** Local TCP port the HTTP server binds to (and the tunnel forwards to). */
   port: number;
@@ -65,6 +83,12 @@ export class SlackWebhookServer {
   private readonly signingSecret: string;
   private readonly channelId?: string;
   private readonly onMessage: (m: SlackInboundMessage) => void;
+  /** Bot's own Slack user id — learned from `authorizations[].user_id` on the
+   *  first event_callback. Used to detect <@BOTID> text mentions. */
+  private botUserId: string | null = null;
+  /** Thread roots where the bot was @-mentioned; subsequent replies in these
+   *  threads also trigger onMessage. Bounded FIFO to prevent unbounded growth. */
+  private readonly activatedThreads: _IActivatedThreads = new _ActivatedThreads();
 
   constructor(opts: SlackWebhookServerOptions) {
     this.port = opts.port;
@@ -177,18 +201,22 @@ export class SlackWebhookServer {
       return;
     }
 
-    // 3) Real events: only plain user messages (no subtype = not an edit/join/
-    //    bot post), optionally filtered to one channel.
+    // 3) Real events: only @-mentions or replies in activated threads — not every
+    //    plain channel message. Cache the bot user id from authorizations so we
+    //    can detect text mentions (<@BOTID>) without an extra API scope.
     if (payload.type === 'event_callback' && payload.event) {
+      // Learn the bot's own user id on first sighting (present on every event_callback).
+      const authUserId = payload.authorizations?.[0]?.user_id;
+      if (authUserId && !this.botUserId) this.botUserId = authUserId;
+
       const ev = payload.event;
-      const isPlainMessage = ev.type === 'message' && !ev.subtype && !ev.bot_id;
-      const channelOk = !this.channelId || ev.channel === this.channelId;
-      if (isPlainMessage && channelOk) {
-        const text = stripLeadingMention(typeof ev.text === 'string' ? ev.text : '');
+      const { trigger, text: rawText } = _shouldTrigger(
+        ev, this.botUserId, this.channelId, this.activatedThreads
+      );
+      if (trigger) {
+        const text = stripLeadingMention(rawText);
         const channel = typeof ev.channel === 'string' ? ev.channel : '';
         const ts = typeof ev.ts === 'string' ? ev.ts : '';
-        // Reply under the original message's thread; if the event is itself a
-        // threaded reply, stay in that thread, else open one rooted at its ts.
         const thread_ts = (typeof ev.thread_ts === 'string' && ev.thread_ts) || ts;
         if (text && channel && ts) {
           try { this.onMessage({ text, channel, ts, thread_ts }); } catch { /* delivery is best-effort */ }
@@ -231,7 +259,11 @@ export class SlackWebhookServer {
 interface SlackPayload {
   type?: string;
   challenge?: string;
+  /** Present on event_callback — contains the bot's own user_id so we can
+   *  detect <@BOTID> text mentions without any extra API scope. */
+  authorizations?: { user_id?: string }[];
   event?: {
+    /** 'message' for regular channel messages; 'app_mention' for @-mentions. */
     type?: string;
     subtype?: string;
     bot_id?: string;
