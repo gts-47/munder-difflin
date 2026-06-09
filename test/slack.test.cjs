@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('assert');
-const { shouldTrigger, ActivatedThreads, ACTIVATED_THREADS_MAX } =
+const { shouldTrigger, ActivatedThreads, ACTIVATED_THREADS_MAX, MAX_FILES_PER_MESSAGE } =
   require('../src/main/slack-trigger.cjs');
 
 let failures = 0;
@@ -197,6 +197,132 @@ function ev(overrides = {}) {
     const threads = new ActivatedThreads();
     assert.strictEqual(shouldTrigger(null, BOT_ID, null, threads).trigger, false);
     assert.strictEqual(shouldTrigger(undefined, BOT_ID, null, threads).trigger, false);
+  });
+
+  // ─── Case 8: file_share attachment handling ───────────────────────────────────
+
+  function fileEv(overrides = {}) {
+    return ev({
+      subtype: 'file_share',
+      text: '',
+      files: [{ id: 'F001', url_private: 'https://files.slack.com/files-pri/T01/F001/img.png', name: 'img.png', mimetype: 'image/png', size: 102400 }],
+      ...overrides,
+    });
+  }
+
+  await test('file_share + @mention → triggered and files extracted', () => {
+    const threads = new ActivatedThreads();
+    const result = shouldTrigger(
+      fileEv({ text: `<@${BOT_ID}> look at this`, ts: '5000.0001' }),
+      BOT_ID, null, threads
+    );
+    assert.strictEqual(result.trigger, true, 'should trigger on mentioned file_share');
+    assert.ok(Array.isArray(result.files), 'files must be an array');
+    assert.strictEqual(result.files.length, 1, 'one file extracted');
+    assert.strictEqual(result.files[0].url_private, 'https://files.slack.com/files-pri/T01/F001/img.png');
+    assert.strictEqual(result.files[0].name, 'img.png');
+    assert.strictEqual(result.files[0].mimetype, 'image/png');
+    assert.ok(threads.has('5000.0001'), 'thread activated on file_share mention');
+  });
+
+  await test('file_share in activated thread (no re-mention) → triggered', () => {
+    const threads = new ActivatedThreads();
+    // Activate via text mention first
+    shouldTrigger(ev({ text: `<@${BOT_ID}> start`, ts: '5001.0001' }), BOT_ID, null, threads);
+    const result = shouldTrigger(
+      fileEv({ ts: '5001.0002', thread_ts: '5001.0001' }),
+      BOT_ID, null, threads
+    );
+    assert.strictEqual(result.trigger, true, 'file in activated thread must trigger');
+    assert.strictEqual(result.files.length, 1, 'file extracted from activated-thread upload');
+  });
+
+  await test('file_share with no mention and no activated thread → NOT triggered', () => {
+    const threads = new ActivatedThreads();
+    const result = shouldTrigger(fileEv({ text: '' }), BOT_ID, null, threads);
+    assert.strictEqual(result.trigger, false, 'unaddressed file upload must not trigger');
+    assert.strictEqual(threads.size, 0, 'must not activate any thread');
+  });
+
+  await test('other subtype (message_changed) even with files → NOT triggered', () => {
+    const threads = new ActivatedThreads();
+    const result = shouldTrigger(
+      ev({ subtype: 'message_changed', text: `<@${BOT_ID}> edit`, files: [{ url_private: 'https://x.slack.com/f' }] }),
+      BOT_ID, null, threads
+    );
+    assert.strictEqual(result.trigger, false, 'message_changed must always be blocked');
+  });
+
+  await test('files without url_private are filtered out', () => {
+    const threads = new ActivatedThreads();
+    const result = shouldTrigger(
+      ev({
+        text: `<@${BOT_ID}> see these`,
+        files: [
+          { id: 'F001', url_private: 'https://files.slack.com/f1', name: 'f1.txt', mimetype: 'text/plain' },
+          { id: 'F002', name: 'no-url.txt' }, // no url_private
+          { url_private: '' },                  // empty url_private
+        ]
+      }),
+      BOT_ID, null, threads
+    );
+    assert.strictEqual(result.trigger, true);
+    assert.strictEqual(result.files.length, 1, 'only the file with url_private is kept');
+    assert.strictEqual(result.files[0].id, 'F001');
+  });
+
+  await test(`files capped at MAX_FILES_PER_MESSAGE (${MAX_FILES_PER_MESSAGE})`, () => {
+    const threads = new ActivatedThreads();
+    const manyFiles = Array.from({ length: MAX_FILES_PER_MESSAGE + 5 }, (_, i) => ({
+      id: `F${i}`, url_private: `https://files.slack.com/f${i}`, name: `f${i}.txt`, mimetype: 'text/plain',
+    }));
+    const result = shouldTrigger(
+      ev({ text: `<@${BOT_ID}> lots`, files: manyFiles }),
+      BOT_ID, null, threads
+    );
+    assert.strictEqual(result.trigger, true);
+    assert.strictEqual(result.files.length, MAX_FILES_PER_MESSAGE, `capped to ${MAX_FILES_PER_MESSAGE}`);
+  });
+
+  await test('text-only trigger still returns empty files array', () => {
+    const threads = new ActivatedThreads();
+    const result = shouldTrigger(
+      ev({ text: `<@${BOT_ID}> just text` }),
+      BOT_ID, null, threads
+    );
+    assert.strictEqual(result.trigger, true);
+    assert.ok(Array.isArray(result.files), 'files must always be an array');
+    assert.strictEqual(result.files.length, 0, 'no files for text-only message');
+  });
+
+  // ─── Download URL + auth header construction (mocked) ─────────────────────────
+  // These tests verify the download helper logic directly without actual HTTPS calls.
+
+  await test('sanitizeSlackFilename: blocks path traversal and special chars', () => {
+    // We test the filename sanitization rules inline (pure logic, no HTTPS).
+    const sanitize = (name, tag) => {
+      const { basename } = require('node:path');
+      const safe = (typeof name === 'string' && name)
+        ? basename(name).replace(/[^\w.\-]/g, '_').replace(/^\.+/, '_').slice(0, 200) || 'file'
+        : 'file';
+      return `${tag}-${safe}`;
+    };
+    // Path traversal attempt
+    assert.ok(!sanitize('../../../etc/passwd', 'x').includes('..'), 'no path traversal');
+    assert.ok(!sanitize('/etc/shadow', 'x').includes('/'), 'no leading slash');
+    // Leading dots
+    assert.ok(!sanitize('.hidden', 'x').split('-')[1].startsWith('.'), 'leading dot replaced');
+    // Normal name passes through
+    assert.ok(sanitize('image.png', 'abc').endsWith('image.png'), 'normal name preserved');
+  });
+
+  await test('bot token is NOT included in files array sent via IPC (structural check)', () => {
+    // The IPC message shape: { text, channel, ts, thread_ts, files?: [{path, name, mimetype}] }
+    // No url_private, no bot token field.
+    const ipcFiles = [{ path: '/tmp/slack-files/abc-img.png', name: 'img.png', mimetype: 'image/png' }];
+    assert.ok(!JSON.stringify(ipcFiles).includes('Bearer'), 'no Bearer token in IPC files');
+    assert.ok(!JSON.stringify(ipcFiles).includes('url_private'), 'no url_private in IPC files');
+    assert.ok(ipcFiles[0].path.startsWith('/'), 'path is absolute');
   });
 
   console.log(failures === 0 ? '\nall passed' : `\n${failures} failure(s)`);

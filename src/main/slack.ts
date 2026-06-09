@@ -35,7 +35,7 @@ const { shouldTrigger: _shouldTrigger, ActivatedThreads: _ActivatedThreads } =
       botUserId: string | null,
       channelId: string | undefined,
       activatedThreads: _IActivatedThreads
-    ) => { trigger: boolean; text: string };
+    ) => { trigger: boolean; text: string; files: _SlackEventFile[] };
     ActivatedThreads: new (maxSize?: number) => _IActivatedThreads;
   };
 
@@ -45,6 +45,18 @@ interface _IActivatedThreads {
   readonly size: number;
 }
 
+/** Raw Slack file metadata as received in the `files[]` array of a file_share event.
+ *  Populated by slack-trigger.cjs; consumed and stripped by index.ts after download. */
+export interface SlackEventFile {
+  id?: string;
+  url_private: string;
+  name?: string;
+  mimetype?: string;
+  size?: number;
+}
+// Internal alias used within this module.
+type _SlackEventFile = SlackEventFile;
+
 export interface SlackWebhookServerOptions {
   /** Local TCP port the HTTP server binds to (and the tunnel forwards to). */
   port: number;
@@ -53,18 +65,28 @@ export interface SlackWebhookServerOptions {
   /** Optional channel id filter — when set, events from other channels are dropped. */
   channelId?: string;
   /** Called once per accepted, de-mentioned message — with the Slack thread
-   *  coordinates needed to reply back in the originating thread. */
-  onMessage: (m: SlackInboundMessage) => void;
+   *  coordinates needed to reply back in the originating thread. May be async
+   *  (e.g. to download file attachments before forwarding via IPC). */
+  onMessage: (m: SlackInboundMessage) => void | Promise<void>;
 }
 
 /** A verified, de-mentioned inbound Slack message plus the coordinates needed to
  *  reply in-thread. `thread_ts` is the original message's thread (or its own ts
- *  when it isn't itself a reply), so office replies nest under the request. */
+ *  when it isn't itself a reply), so office replies nest under the request.
+ *
+ *  `files` carries LOCAL file paths (post-download by index.ts); it is absent for
+ *  text-only messages. `_rawFiles` is an INTERNAL transport field that index.ts
+ *  reads to download attachments, then strips before forwarding via IPC — renderers
+ *  never see it. */
 export interface SlackInboundMessage {
   text: string;
   channel: string;
   ts: string;
   thread_ts: string;
+  /** LOCAL paths of downloaded attachments (undefined for text-only messages). */
+  files?: { path: string; name: string; mimetype: string }[];
+  /** INTERNAL: raw Slack file metadata; consumed + stripped by index.ts onMessage. */
+  _rawFiles?: SlackEventFile[];
 }
 
 /** Reject request bodies larger than this — Slack event payloads are tiny; the
@@ -82,7 +104,7 @@ export class SlackWebhookServer {
   private readonly port: number;
   private readonly signingSecret: string;
   private readonly channelId?: string;
-  private readonly onMessage: (m: SlackInboundMessage) => void;
+  private readonly onMessage: (m: SlackInboundMessage) => void | Promise<void>;
   /** Bot's own Slack user id — learned from `authorizations[].user_id` on the
    *  first event_callback. Used to detect <@BOTID> text mentions. */
   private botUserId: string | null = null;
@@ -210,7 +232,7 @@ export class SlackWebhookServer {
       if (authUserId && !this.botUserId) this.botUserId = authUserId;
 
       const ev = payload.event;
-      const { trigger, text: rawText } = _shouldTrigger(
+      const { trigger, text: rawText, files: rawFiles } = _shouldTrigger(
         ev, this.botUserId, this.channelId, this.activatedThreads
       );
       if (trigger) {
@@ -218,8 +240,11 @@ export class SlackWebhookServer {
         const channel = typeof ev.channel === 'string' ? ev.channel : '';
         const ts = typeof ev.ts === 'string' ? ev.ts : '';
         const thread_ts = (typeof ev.thread_ts === 'string' && ev.thread_ts) || ts;
-        if (text && channel && ts) {
-          try { this.onMessage({ text, channel, ts, thread_ts }); } catch { /* delivery is best-effort */ }
+        // Fire when text is non-empty OR files are attached (file_share may have no caption).
+        if ((text || rawFiles.length > 0) && channel && ts) {
+          const msg: SlackInboundMessage = { text, channel, ts, thread_ts };
+          if (rawFiles.length > 0) msg._rawFiles = rawFiles;
+          try { void this.onMessage(msg); } catch { /* delivery is best-effort */ }
         }
       }
     }
@@ -265,6 +290,7 @@ interface SlackPayload {
   event?: {
     /** 'message' for regular channel messages; 'app_mention' for @-mentions. */
     type?: string;
+    /** 'file_share' for file uploads; 'message_changed' / 'channel_join' etc. dropped. */
     subtype?: string;
     bot_id?: string;
     channel?: string;
@@ -273,6 +299,14 @@ interface SlackPayload {
     ts?: string;
     /** Set when the message is itself a reply; the thread to post back into. */
     thread_ts?: string;
+    /** Present on file_share events — the uploaded files' metadata. */
+    files?: {
+      id?: string;
+      url_private?: string;
+      name?: string;
+      mimetype?: string;
+      size?: number;
+    }[];
   };
 }
 

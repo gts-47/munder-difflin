@@ -564,9 +564,14 @@ export function useHive(config: HarnessConfig | null): void {
   useEffect(() => {
     if (!config?.onboardingComplete) return;
     return window.cth.onSlackMessage((msg) => {
-      if (!msg?.text?.trim()) return;
-      const text = msg.text.trim();
-      if (!text) return;
+      const hasFiles = Array.isArray(msg.files) && msg.files.length > 0;
+      if (!msg?.text?.trim() && !hasFiles) return;
+      let text = msg.text.trim();
+      // Append local file paths so the agent (Claude Code) can Read them directly.
+      if (hasFiles) {
+        const fileLines = msg.files!.map((f) => `- ${f.path} (${f.name})`).join('\n');
+        text = text ? `${text}\n\nAttached files:\n${fileLines}` : `Attached files:\n${fileLines}`;
+      }
       const slack = { channel: msg.channel, thread_ts: msg.thread_ts };
       useStore.getState().enqueueMessage(GOD_ID, text, { slack });
       // Immediate "queued" acknowledgement in the originating Slack thread.

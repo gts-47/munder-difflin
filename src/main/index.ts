@@ -1,8 +1,9 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { spawn } from 'node:child_process';
-import { rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync, unlinkSync } from 'node:fs';
+import { rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync, unlinkSync, mkdirSync, createWriteStream } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
-import { join, resolve, sep } from 'node:path';
+import { join, resolve, sep, basename } from 'node:path';
+import { request as httpsRequest } from 'node:https';
 import { PtyManager, type SpawnOptions } from './pty';
 import {
   readConfig, writeConfig, resetConfig, ensureHarnessHome, ensureClaudePermissionsAccepted,
@@ -22,7 +23,7 @@ import { MemoryReflector, type ReflectSettings } from './reflect';
 import { PersistStore } from './db';
 import { readAgentUsage, readContextTokens } from './transcript';
 import { listIssues, listCIRuns } from './github';
-import { SlackWebhookServer, SlackReplyServer, postSlackReply } from './slack';
+import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
 import { WebhookServer, type WebhookInbound, type WebhookTaskStatus } from './webhook';
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
@@ -578,6 +579,110 @@ function slackDoneNotifiedPath(): string {
   return join(app.getPath('userData'), 'slack-done-notified.json');
 }
 
+/** Directory where downloaded Slack attachments are saved (out of repo, out of MemPalace). */
+function slackFilesDir(): string {
+  return join(app.getPath('userData'), 'slack-files');
+}
+
+/** Per-file download size cap — reject files larger than 10 MB before writing. */
+const SLACK_FILE_MAX_BYTES = 10 * 1024 * 1024;
+
+/** Sanitize a Slack filename: keep only the basename, replace non-safe chars,
+ *  prefix with a random hex tag to prevent collisions and path-traversal attacks. */
+function sanitizeSlackFilename(name: string | undefined, tag: string): string {
+  const safe = (typeof name === 'string' && name)
+    ? basename(name).replace(/[^\w.\-]/g, '_').replace(/^\.+/, '_').slice(0, 200) || 'file'
+    : 'file';
+  return `${tag}-${safe}`;
+}
+
+/**
+ * Download a single Slack private file into slackFilesDir() using the bot token.
+ * Returns the local path on success, null on any failure (size limit, network, etc.).
+ * The bot token is used only in the Authorization header and is NEVER logged.
+ */
+function downloadSlackFile(
+  file: SlackEventFile,
+  botToken: string,
+  destDir: string
+): Promise<{ path: string; name: string; mimetype: string } | null> {
+  return new Promise((resolve) => {
+    const tag = randomBytes(4).toString('hex');
+    const filename = sanitizeSlackFilename(file.name, tag);
+    const destPath = join(destDir, filename);
+    const name = file.name ?? filename;
+    const mimetype = file.mimetype ?? 'application/octet-stream';
+
+    try {
+      mkdirSync(destDir, { recursive: true });
+    } catch {
+      resolve(null);
+      return;
+    }
+
+    let urlObj: URL;
+    try {
+      urlObj = new URL(file.url_private);
+    } catch {
+      resolve(null);
+      return;
+    }
+    if (urlObj.protocol !== 'https:') { resolve(null); return; }
+
+    const req = httpsRequest(
+      { hostname: urlObj.hostname, path: urlObj.pathname + urlObj.search, method: 'GET',
+        headers: { authorization: `Bearer ${botToken}` } },
+      (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          res.resume(); // drain response body
+          resolve(null);
+          return;
+        }
+        let written = 0;
+        let aborted = false;
+        const stream = createWriteStream(destPath);
+        res.on('data', (chunk: Buffer) => {
+          if (aborted) return;
+          written += chunk.length;
+          if (written > SLACK_FILE_MAX_BYTES) {
+            aborted = true;
+            stream.destroy();
+            try { unlinkSync(destPath); } catch { /* best-effort cleanup */ }
+            res.destroy();
+            resolve(null);
+            return;
+          }
+          stream.write(chunk);
+        });
+        res.on('end', () => {
+          if (aborted) return;
+          stream.end(() => resolve({ path: destPath, name, mimetype }));
+        });
+        res.on('error', () => { stream.destroy(); resolve(null); });
+        stream.on('error', () => { res.destroy(); resolve(null); });
+      }
+    );
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+/**
+ * Download all raw Slack files (up to cap) and return the local-path file list.
+ * Failures are silently dropped — a partial list is still useful to the agent.
+ */
+async function downloadSlackFiles(
+  rawFiles: SlackEventFile[],
+  botToken: string | undefined
+): Promise<{ path: string; name: string; mimetype: string }[]> {
+  if (!rawFiles.length || !botToken) return [];
+  const destDir = slackFilesDir();
+  const results = await Promise.all(
+    rawFiles.map((f) => downloadSlackFile(f, botToken, destDir))
+  );
+  return results.filter((r): r is { path: string; name: string; mimetype: string } => r !== null);
+}
+
 function loadSlackDoneNotified(): Set<string> {
   try {
     const arr = JSON.parse(readFileSync(slackDoneNotifiedPath(), 'utf8'));
@@ -695,9 +800,17 @@ async function startSlackServer(): Promise<{ ok: boolean; url?: string; error?: 
     channelId: cfg.slackChannelId,
     // Fires from the HTTP server's event loop (not the IPC thread); route through
     // liveWebContents() so a message arriving during window teardown can't throw.
-    // Forwards the full thread metadata so the renderer can ack + reply in-thread.
-    onMessage: (m) => {
-      try { liveWebContents()?.send('slack:incomingMessage', m); }
+    // Downloads any file attachments (bot token stays in main; local paths go to IPC).
+    onMessage: async (m) => {
+      const localFiles = await downloadSlackFiles(
+        m._rawFiles ?? [],
+        readConfig().slackBotToken
+      );
+      const ipcMsg: { text: string; channel: string; ts: string; thread_ts: string; files?: typeof localFiles } = {
+        text: m.text, channel: m.channel, ts: m.ts, thread_ts: m.thread_ts
+      };
+      if (localFiles.length > 0) ipcMsg.files = localFiles;
+      try { liveWebContents()?.send('slack:incomingMessage', ipcMsg); }
       catch { /* window torn down */ }
     }
   });
