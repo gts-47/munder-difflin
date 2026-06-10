@@ -24,6 +24,13 @@ files:
 extraResources:
   - from: resources/md-slack-reply.cjs
     to: md-slack-reply.cjs
+  # Knowledge Graph agent CLI + its pure-JS core. Agents invoke `node
+  # <resources>/kg.cjs` out-of-process; kg-core.cjs ships beside it so the CLI's
+  # `require('./kg-core.cjs')` resolves outside the asar.
+  - from: resources/kg.cjs
+    to: kg.cjs
+  - from: src/main/kg-core.cjs
+    to: kg-core.cjs
 
 asarUnpack:
   - "**/node_modules/node-pty/**"

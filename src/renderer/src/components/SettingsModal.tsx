@@ -193,6 +193,41 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [showWebhookHelp, setShowWebhookHelp] = useState(false);
 
+  // ─── Knowledge Graph (enterprise multimodal context for agents) ───────────
+  const [kgEnabled, setKgEnabled] = useState<boolean>(
+    (config as HarnessConfig & { knowledgeGraph?: { enabled?: boolean } }).knowledgeGraph?.enabled === true
+  );
+  const [kgDocCount, setKgDocCount] = useState(0);
+  const [kgBusy, setKgBusy] = useState(false);
+  const [kgNote, setKgNote] = useState('');
+
+  const refreshKgStatus = async () => {
+    try { const s = await window.cth.kgStatus(); setKgDocCount(s.docCount); }
+    catch { /* status unavailable */ }
+  };
+
+  const toggleKg = async () => {
+    const next = !kgEnabled;
+    setKgEnabled(next);
+    try {
+      await window.cth.updateConfig({ knowledgeGraph: { enabled: next } });
+      if (next) await refreshKgStatus();
+    } catch { setKgEnabled(!next); }
+  };
+
+  const addKgFiles = async () => {
+    setKgBusy(true); setKgNote('');
+    try {
+      const res = await window.cth.kgAddFiles();
+      if (!res.ok) { setKgNote(res.error === 'cancelled' ? '' : (res.error ?? 'failed')); return; }
+      const added = res.results.filter((r) => r.ok).length;
+      const failed = res.results.length - added;
+      setKgNote(`added ${added} document${added === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}`);
+      await refreshKgStatus();
+    } catch (e) { setKgNote(e instanceof Error ? e.message : String(e)); }
+    finally { setKgBusy(false); }
+  };
+
   // Re-seed every editable field from the on-disk config when the modal opens.
   // App's `config` prop is loaded once and never refreshed after a save, so
   // without this the saved budget / velocity / slack values show blank on reopen.
@@ -212,7 +247,11 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
       setWebhookEnabled(cc.webhookEnabled ?? false);
       setWebhookSecret(cc.webhookSecret ?? '');
       setWebhookPort(String(cc.webhookPort ?? 3849));
+      const kgOn = (cc as { knowledgeGraph?: { enabled?: boolean } }).knowledgeGraph?.enabled === true;
+      setKgEnabled(kgOn);
     }).catch(() => { /* keep prop-seeded values */ });
+    window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
+      .catch(() => { /* status unavailable */ });
     // Hydrate live connection state + the persisted Request URL: the
     // tunnel URL lives in main, so reopening Settings while connected re-shows it.
     window.cth.slackStatus().then((s) => {
@@ -659,6 +698,46 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                             {budgetNote && <span style={{ fontSize: 12, color: 'var(--cth-mint)' }}>{budgetNote}</span>}
                           </div>
                         </div>
+                      </div>
+
+                      <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+
+                      {/* Knowledge Graph — enterprise multimodal context for agents */}
+                      <div>
+                        <div style={{
+                          fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+                          color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
+                        }}>
+                          Knowledge Graph
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                              Enterprise knowledge base
+                            </span>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                              Add your docs, images &amp; PDFs; agents query them on demand via the <code>kg</code> tool.
+                            </span>
+                          </div>
+                          <PixelButton
+                            variant={kgEnabled ? 'primary' : 'secondary'}
+                            size="sm"
+                            onClick={toggleKg}
+                          >
+                            {kgEnabled ? 'on' : 'off'}
+                          </PixelButton>
+                        </div>
+                        {kgEnabled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                            <PixelButton variant="secondary" size="sm" onClick={addKgFiles} disabled={kgBusy}>
+                              {kgBusy ? 'adding…' : 'add files…'}
+                            </PixelButton>
+                            <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
+                              {kgDocCount} document{kgDocCount === 1 ? '' : 's'} indexed
+                            </span>
+                            {kgNote && <span style={{ fontSize: 12, color: 'var(--cth-mint)' }}>{kgNote}</span>}
+                          </div>
+                        )}
                       </div>
                     </>
                   )}

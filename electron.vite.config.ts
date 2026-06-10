@@ -15,7 +15,11 @@ const define = { __APP_VERSION__: JSON.stringify(pkg.version) };
 // build, so the sidecar is emitted from a single place for every path.
 function copyMainSidecars() {
   const ASSETS: Array<[string, string]> = [
-    ['src/main/slack-trigger.cjs', 'out/main/slack-trigger.cjs']
+    ['src/main/slack-trigger.cjs', 'out/main/slack-trigger.cjs'],
+    // Knowledge Graph core: required by knowledge.ts at runtime (pure-JS, no
+    // native deps), so it must be emitted next to the main bundle like the
+    // Slack sidecar above.
+    ['src/main/kg-core.cjs', 'out/main/kg-core.cjs']
   ];
   return {
     name: 'copy-main-cjs-sidecars',

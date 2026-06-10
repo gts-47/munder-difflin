@@ -133,6 +133,11 @@ export interface ScheduledMission {
 }
 
 /** Circuit-breaker thresholds (Lane A #6.6b). Mirrors src/main/config.ts. */
+export interface KnowledgeGraphConfig {
+  enabled?: boolean;
+  rootPath?: string;
+}
+
 export interface CircuitBreakerConfig {
   enabled?: boolean;
   hardStop?: boolean;
@@ -167,6 +172,8 @@ export interface HarnessConfig {
   agentTokenCaps?: Record<string, number>;
   maxTurns?: number;
   circuitBreaker?: CircuitBreakerConfig;
+  /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
+  knowledgeGraph?: KnowledgeGraphConfig;
   /** Terminal theme, mirrored into each agent's per-session Claude settings. */
   terminalTheme?: 'light' | 'dark';
 }
@@ -179,6 +186,44 @@ export interface MemoryStatus {
   palacePath: string | null;
   model: 'minilm' | 'embeddinggemma';
   bin: string | null;
+}
+
+/** Enterprise Knowledge Graph — corpus status, one document, and a search hit. */
+export interface KnowledgeStatus {
+  enabled: boolean;
+  root: string;
+  docCount: number;
+  chunkCount: number;
+  byModality: Record<string, number>;
+}
+export interface KnowledgeDoc {
+  id: string;
+  title: string;
+  source: string;
+  modality: string;
+  mime: string | null;
+  origExt: string;
+  bytes: number;
+  tags: string[];
+  caption: string | null;
+  chunkCount: number;
+  addedAt: string;
+  extractor: string;
+  truncated: boolean;
+}
+export interface KnowledgeHit {
+  docId: string;
+  title: string;
+  source: string;
+  modality: string;
+  chunkIdx: number;
+  score: number;
+  snippet: string;
+}
+export interface KnowledgeIngestResult {
+  ok: boolean;
+  results: Array<{ ok: boolean; srcPath: string; docId?: string; chunkCount?: number; error?: string }>;
+  error?: string;
 }
 
 export interface DirEntry {
@@ -402,6 +447,20 @@ const api = {
    *  the per-agent outcomes ({ id, condensed, reason, oldBytes?, newBytes? }). */
   reflectNow: (id?: string): Promise<Array<{ id: string; condensed: boolean; reason: string; oldBytes?: number; newBytes?: number }>> =>
     ipcRenderer.invoke('memory:reflectNow', id),
+
+  // ─── Enterprise Knowledge Graph (multimodal context for agents) ───────────
+  kgStatus: (): Promise<KnowledgeStatus> => ipcRenderer.invoke('kg:status'),
+  kgList: (): Promise<KnowledgeDoc[]> => ipcRenderer.invoke('kg:list'),
+  kgSearch: (query: string, limit?: number): Promise<KnowledgeHit[]> =>
+    ipcRenderer.invoke('kg:search', query, limit),
+  kgGet: (id: string): Promise<{ meta: KnowledgeDoc; text: string } | null> =>
+    ipcRenderer.invoke('kg:get', id),
+  kgRemove: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:remove', id),
+  /** Open an OS file picker and ingest the chosen artifacts in one round-trip. */
+  kgAddFiles: (): Promise<KnowledgeIngestResult> => ipcRenderer.invoke('kg:addFiles'),
+  /** Ingest explicit file paths (e.g. drag-and-drop). */
+  kgIngestFiles: (paths: string[], tags?: string[]): Promise<KnowledgeIngestResult> =>
+    ipcRenderer.invoke('kg:ingestFiles', { paths, tags }),
 
   // ─── Command history (SQLite — every prompt submitted to an agent) ─────────
   /** Record one submitted prompt. Fire-and-forget from the prompt-detection hook. */
