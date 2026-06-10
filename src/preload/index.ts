@@ -463,6 +463,11 @@ const api = {
   confirmClose: (): Promise<void> => ipcRenderer.invoke('app:confirmClose'),
   cancelClose: (): Promise<void> => ipcRenderer.invoke('app:cancelClose'),
 
+  // ─── Multi-window floors ───────────────────────────────────────────────────
+  /** Open a new floor (independent office window). No-op when the multiWindow
+   *  flag is off. Resolves { ok } indicating whether a window opened. */
+  newFloor: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('window:newFloor'),
+
   // ─── Closing time (graceful shutdown via the hive) ─────────────────────────
   /** Start the closing-time protocol: the god broadcasts shutdown, every worker
    *  saves its memory and ACKs, the god concludes — then the app quits itself.

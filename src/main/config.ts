@@ -138,6 +138,14 @@ export interface HarnessConfig {
   circuitBreaker?: CircuitBreakerConfig;
   /** Fire native desktop notifications on agent lifecycle events (idle finish / waiting for input). */
   notifications?: boolean;
+  /** Multi-window "floors": expose a New Floor action that opens additional
+   *  windows, each an independent office with isolated renderer state (its own
+   *  session partition) and per-window PTY routing. OFF by default (opt-in) —
+   *  the window/PTY-ownership plumbing is always active and single-window-safe,
+   *  but the New Floor entry points (app menu item + IPC) only appear when on.
+   *  The on-disk hive (god orchestration under harnessHome) stays process-global;
+   *  floors share it. */
+  multiWindow?: boolean;
   /** Terminal theme — mirrored into each agent's per-session Claude settings
    *  ("theme" key) at spawn so the TUI's truecolor palette matches. Scoped to
    *  harness agents only; the user's global Claude theme is never touched. */
@@ -189,6 +197,7 @@ const DEFAULTS: HarnessConfig = {
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
   notifications: false,
+  multiWindow: false,
   slackEnabled: false,
   slackSigningSecret: undefined,
   slackBotToken: undefined,
