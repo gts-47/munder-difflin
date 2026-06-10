@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, powerSaveBlocker, screen, shell, Notification } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { spawn } from 'node:child_process';
 import { rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync, unlinkSync, mkdirSync, createWriteStream } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
@@ -128,7 +128,18 @@ const reflector = new MemoryReflector(
 // Durable harness state (SQLite, main process). Phase A: window bounds (kv) +
 // net-new command history. Opened in whenReady, closed in the teardown blocks.
 const persist = new PersistStore();
+/** The PRIMARY window — the one running the hive/god orchestration and the sink
+ *  for process-global timer events (missions, breaker, Slack ingestion). It is
+ *  the most-recently-focused live window, so global events follow the user.
+ *  Additional "floor" windows are tracked in `allWindows` below. */
 let mainWindow: BrowserWindow | null = null;
+/** Every open window (primary + floors). A registry, not a single handle, so
+ *  multi-window lifecycle (focus tracking, quit fan-out) is correct. */
+const allWindows = new Set<BrowserWindow>();
+/** Monotonic floor counter → a stable, unique session partition per floor so
+ *  each floor's renderer state (localStorage: agents, queues, selection) is
+ *  isolated from every other window's. */
+let floorSeq = 0;
 
 /** When true, skip the quit interceptor (user already confirmed). */
 let allowQuit = false;
@@ -592,7 +603,13 @@ function armHeartbeat(m: ScheduledMission): void {
  *  throws "Object has been destroyed" (the main-process crash dialog). */
 function liveWebContents(): Electron.WebContents | null {
   const wc = mainWindow?.webContents;
-  return wc && !wc.isDestroyed() ? wc : null;
+  if (wc && !wc.isDestroyed()) return wc;
+  // Primary gone (closed/destroyed): fall back to any other live window so a
+  // global event still reaches a renderer instead of being silently dropped.
+  for (const w of allWindows) {
+    if (!w.isDestroyed() && !w.webContents.isDestroyed()) return w.webContents;
+  }
+  return null;
 }
 
 // ─── Slack webhook server (Slack message → Michael's queue) ──────────────────
@@ -1124,18 +1141,42 @@ function debounce(fn: () => void, ms: number): () => void {
   return () => { if (t) clearTimeout(t); t = setTimeout(() => { t = null; fn(); }, ms); };
 }
 
-function createWindow(): void {
-  // Restore the last window geometry (kv), falling back to the default size.
+/** Cascade a new floor off the focused window so it doesn't stack exactly on
+ *  top, clamped on-screen (clampBounds drops an off-display position). */
+function floorCascade(): WindowBounds | null {
+  const base = (mainWindow && !mainWindow.isDestroyed())
+    ? mainWindow
+    : [...allWindows].find((w) => !w.isDestroyed());
+  if (!base) return null;
+  const b = base.getBounds();
+  const OFFSET = 36;
+  return clampBounds({ x: b.x + OFFSET, y: b.y + OFFSET, width: b.width, height: b.height });
+}
+
+/**
+ * Create a window. The PRIMARY window (no opts) restores saved geometry, uses
+ * the default session, runs the hive, and keeps the existing app-quit warning.
+ * A FLOOR window (`{ floor: true }`) gets its own persistent session partition
+ * — isolating its renderer state (agents/queues/selection) from every other
+ * window — cascades its position, and on close stops only its OWN terminals
+ * while the app keeps running.
+ */
+function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
+  const isFloor = opts.floor === true;
+
+  // Primary restores saved geometry; floors cascade off the focused window.
   let saved: WindowBounds | null = null;
-  try { saved = clampBounds(persist.getKv('window.bounds')); } catch { saved = null; }
+  if (!isFloor) { try { saved = clampBounds(persist.getKv('window.bounds')); } catch { saved = null; } }
+  const cascade = isFloor ? floorCascade() : null;
+  const geom = cascade ?? saved;
 
   const win = new BrowserWindow({
-    width: saved?.width ?? DEFAULT_WIN.width,
-    height: saved?.height ?? DEFAULT_WIN.height,
-    ...(saved && saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y } : {}),
+    width: geom?.width ?? DEFAULT_WIN.width,
+    height: geom?.height ?? DEFAULT_WIN.height,
+    ...(geom && geom.x !== undefined && geom.y !== undefined ? { x: geom.x, y: geom.y } : {}),
     minWidth: MIN_WIN.width,
     minHeight: MIN_WIN.height,
-    title: 'Munder Difflin',
+    title: isFloor ? 'Munder Difflin — Floor' : 'Munder Difflin',
     backgroundColor: '#FFF8E7',
     titleBarStyle: 'hiddenInset',
     show: false,
@@ -1148,24 +1189,39 @@ function createWindow(): void {
       // flush, telemetry polls). Chromium throttles timers in occluded windows
       // — incl. behind the LOCK SCREEN — which silently stalls the hive while
       // the user is away. Don't.
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // Each floor gets its OWN persistent session partition → isolated
+      // localStorage so floors never share or stomp each other's office state.
+      // The primary keeps the DEFAULT session so existing persisted state loads.
+      ...(isFloor ? { partition: `persist:floor-${++floorSeq}` } : {})
     }
   });
 
-  mainWindow = win;
+  // Capture the webContents once: after 'closed' the window is gone, but this
+  // reference stays valid as the per-PTY ownership key.
+  const wc = win.webContents;
 
-  // Persist geometry as the user drags/resizes (debounced) and on close. Skip
-  // while maximized/minimized so a restore doesn't save the fullscreen rect.
-  const saveBounds = debounce(() => {
-    if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
-    try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
-  }, 400);
-  win.on('resized', saveBounds);
-  win.on('moved', saveBounds);
-  win.on('close', () => {
-    if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
-    try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
-  });
+  allWindows.add(win);
+  // Global timer events follow the user — the most-recently-focused window is
+  // primary. The primary is also seeded synchronously so boot events route now.
+  win.on('focus', () => { mainWindow = win; });
+  if (!isFloor) mainWindow = win;
+
+  // Only the primary persists geometry (kv `window.bounds`); floors cascade
+  // fresh each launch. Skip while maximized/minimized so a restore doesn't save
+  // the fullscreen rect.
+  if (!isFloor) {
+    const saveBounds = debounce(() => {
+      if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
+      try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
+    }, 400);
+    win.on('resized', saveBounds);
+    win.on('moved', saveBounds);
+    win.on('close', () => {
+      if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
+      try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
+    });
+  }
 
   win.once('ready-to-show', () => win.show());
 
@@ -1174,19 +1230,38 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // On macOS, the red-X "close" event by default destroys the window — and on
-  // a single-window app, that effectively quits. Intercept it the same way we
-  // intercept before-quit so PTY users get the warning.
+  // Close interception when live PTYs exist. The red-X destroys the window;
+  // intercept it the same way before-quit does so PTY users aren't surprised.
   win.on('close', (e) => {
     if (allowQuit) return;
+    if (isFloor) {
+      // A floor's close is NOT an app quit — confirm only its OWN terminals,
+      // via a self-contained native dialog (no renderer modal). Confirming lets
+      // the window close; its PTYs are stopped in the 'closed' handler.
+      const owned = ptyManager.countByOwner(wc);
+      if (owned > 0) {
+        const choice = dialog.showMessageBoxSync(win, {
+          type: 'warning',
+          buttons: ['Close floor', 'Cancel'],
+          defaultId: 1,
+          cancelId: 1,
+          message: `Close this floor? ${owned} running terminal${owned === 1 ? '' : 's'} on it will be stopped.`,
+          detail: 'Other floors keep running.'
+        });
+        if (choice === 1) e.preventDefault();
+      }
+      return;
+    }
+    // Primary window: existing app-wide quit warning (renderer modal).
     const count = ptyManager.list().length;
     if (count === 0) return;
     e.preventDefault();
     win.focus();
-    win.webContents.send('app:closeRequested', { ptyCount: count });
+    wc.send('app:closeRequested', { ptyCount: count });
   });
 
-  ptyManager.attachWebContents(win.webContents);
+  // The primary is the default PTY sink; floors route purely by per-PTY owner.
+  if (!isFloor) ptyManager.attachWebContents(wc);
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -1195,12 +1270,56 @@ function createWindow(): void {
   }
 
   win.on('closed', () => {
-    if (mainWindow === win) mainWindow = null;
+    allWindows.delete(win);
+    // A closed floor must not leave its terminals running headless. (Natural
+    // onExit teardown — archive + worktree cleanup — still runs per PTY.)
+    if (isFloor) { try { ptyManager.killByOwner(wc); } catch { /* best-effort */ } }
+    if (mainWindow === win) {
+      mainWindow = null;
+      for (const w of allWindows) { if (!w.isDestroyed()) { mainWindow = w; break; } }
+    }
+    syncKeepAwake();
   });
+
+  return win;
+}
+
+/** Open a new floor window — gated by the multiWindow flag. Returns the window,
+ *  or null when the feature is off (the entry points are hidden in that case,
+ *  but the IPC stays defensive). */
+function openFloor(): BrowserWindow | null {
+  if (!readConfig().multiWindow) return null;
+  return createWindow({ floor: true });
+}
+
+/** Build + install the application menu. Only called when multiWindow is on, so
+ *  flag-off keeps Electron's default menu (zero behavior change). Uses standard
+ *  role-based items so copy/paste/quit/etc. work per-platform, and adds the
+ *  "New Floor" item (Cmd/Ctrl+Shift+N). */
+function installAppMenu(): void {
+  const isMac = process.platform === 'darwin';
+  const newFloorItem = {
+    label: 'New Floor',
+    accelerator: 'CmdOrCtrl+Shift+N',
+    click: () => { openFloor(); }
+  };
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: isMac
+        ? [newFloorItem, { type: 'separator' as const }, { role: 'close' as const }]
+        : [newFloorItem, { type: 'separator' as const }, { role: 'quit' as const }]
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // ─── IPC: pty lifecycle ─────────────────────────────────────────────────────
-ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; provider?: AgentProvider }) => {
+ipcMain.handle('pty:spawn', async (evt, opts: SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; provider?: AgentProvider }) => {
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
   }
@@ -1315,7 +1434,10 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   if (Object.keys(nonInteractiveEnv).length > 0) {
     opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };
   }
-  const res = ptyManager.spawn(opts);
+  // Record the spawning window as the PTY's owner so its output (pty:data/exit)
+  // routes ONLY back to that floor — never leaking into another window's stream.
+  const owner = BrowserWindow.fromWebContents(evt.sender)?.webContents ?? null;
+  const res = ptyManager.spawn(opts, owner);
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
   return res;
 });
@@ -1626,6 +1748,14 @@ ipcMain.handle('app:cancelClose', () => {
   // no-op — modal will close on the renderer side
 });
 
+// Open a new floor (independent office window). Gated by the multiWindow flag
+// inside openFloor(); returns whether a window opened so a renderer button can
+// reflect availability. The app-menu "New Floor" item calls openFloor() directly.
+ipcMain.handle('window:newFloor', () => {
+  const win = openFloor();
+  return { ok: win != null };
+});
+
 // ─── IPC: closing time (graceful, data-loss-free shutdown) ──────────────────
 // The third quit-dialog button. The god broadcasts closing time, every worker
 // saves its memory and ACKs, the god concludes with CLOSING-TIME-COMPLETE —
@@ -1919,6 +2049,9 @@ app.whenReady().then(() => {
   try { persist.open(); } catch (e) { console.error('[db] open failed:', e); }
   // Bootstrap the hive (if harnessHome is configured) and start the message router.
   bootstrapHiveServices();
+  // Multi-window floors (opt-in): install the menu carrying "New Floor". When
+  // off, the app keeps Electron's default menu — zero behavior change.
+  if (readConfig().multiWindow) installAppMenu();
   createWindow();
   // Auto-start the Slack webhook server when configured. Best-effort: a tunnel
   // failure (offline) is logged, not fatal. The tunnel URL is ephemeral and
