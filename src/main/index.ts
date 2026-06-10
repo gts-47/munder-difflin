@@ -19,6 +19,7 @@ import { HookServer } from './hooks';
 import { CircuitBreaker, type BreakerInput } from './breaker';
 import type { UsageProvider } from './usage';
 import { MemoryManager } from './memory';
+import { KnowledgeManager } from './knowledge';
 import { MemoryReflector, type ReflectSettings } from './reflect';
 import { PersistStore } from './db';
 import { readAgentUsage, readContextTokens } from './transcript';
@@ -100,6 +101,8 @@ const memory = new MemoryManager(
   () => readConfig().harnessHome,
   () => { const c = readConfig(); return { enabled: c.semanticMemory !== false, model: c.embeddingModel ?? 'minilm' }; }
 );
+// Enterprise Knowledge Graph — file-backed store + agent CLI (default OFF).
+const knowledge = new KnowledgeManager();
 /** Reads the reflect tunables from config each tick (defaults baked in here so a
  *  pre-existing config.json without the keys still gets sane values). */
 function reflectSettings(): ReflectSettings {
@@ -1248,11 +1251,16 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
     try {
       const inj = hive.ensureAgent(
         { ...opts.hive, cwd: opts.cwd, provider },
-        { semanticMemory: memory.active(), theme: readConfig().terminalTheme ?? 'light' }
+        {
+          semanticMemory: memory.active(),
+          knowledgeGraph: knowledge.active(),
+          theme: readConfig().terminalTheme ?? 'light'
+        }
       );
       opts.args = [...(opts.args ?? []), ...inj.args];
-      // Point the agent's mempalace CLI at the shared palace (no-op if inactive).
-      opts.env = { ...(opts.env ?? {}), ...inj.env, ...memory.env() };
+      // Point the agent's mempalace CLI at the shared palace + the `kg` CLI at the
+      // enterprise knowledge store (both no-ops / empty when their flags are off).
+      opts.env = { ...(opts.env ?? {}), ...inj.env, ...memory.env(), ...knowledge.env() };
     } catch (e) {
       // Hive provisioning is best-effort; never block a spawn on it.
       console.error('[hive] ensureAgent failed:', e);
@@ -1527,6 +1535,53 @@ ipcMain.handle('hive:mineNow', () => { memory.mineNow(); return { ok: true }; })
 // the size trigger — a "condense now" button); no id runs a full threshold scan.
 ipcMain.handle('memory:reflectNow', (_evt, id: unknown) =>
   reflector.reflectNow(typeof id === 'string' && id ? id : undefined));
+
+// ─── IPC: enterprise Knowledge Graph (multimodal context for agents) ─────────
+ipcMain.handle('kg:status', () => knowledge.status());
+ipcMain.handle('kg:list', () => knowledge.list());
+ipcMain.handle('kg:search', (_evt, query: unknown, limit: unknown) => {
+  if (typeof query !== 'string' || !query.trim()) return [];
+  return knowledge.search(query, typeof limit === 'number' ? limit : undefined);
+});
+ipcMain.handle('kg:get', (_evt, id: unknown) =>
+  (typeof id === 'string' && id ? knowledge.get(id) : null));
+ipcMain.handle('kg:remove', (_evt, id: unknown) =>
+  ({ ok: typeof id === 'string' && id ? knowledge.remove(id) : false }));
+// Ingest one or more files from disk. Best-effort per file; returns per-file
+// results so the UI can report partial success.
+ipcMain.handle('kg:ingestFiles', (_evt, payload: unknown) => {
+  const p = (payload ?? {}) as { paths?: unknown; tags?: unknown };
+  const paths = Array.isArray(p.paths) ? p.paths.filter((x): x is string => typeof x === 'string') : [];
+  const tags = Array.isArray(p.tags) ? p.tags.filter((x): x is string => typeof x === 'string') : undefined;
+  const results = paths.map((srcPath) => {
+    try {
+      const r = knowledge.ingestFile(srcPath, { tags });
+      return { ok: true as const, srcPath, docId: r.docId, chunkCount: r.chunkCount };
+    } catch (e) {
+      return { ok: false as const, srcPath, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  return { results };
+});
+// Open a multi-file picker and ingest the chosen artifacts in one round-trip.
+ipcMain.handle('kg:addFiles', async (evt) => {
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  if (!win) return { ok: false as const, error: 'no window' };
+  const res = await dialog.showOpenDialog(win, {
+    properties: ['openFile', 'multiSelections'],
+    title: 'Add documents to the Knowledge Graph'
+  });
+  if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
+  const results = res.filePaths.map((srcPath) => {
+    try {
+      const r = knowledge.ingestFile(srcPath);
+      return { ok: true as const, srcPath, docId: r.docId, chunkCount: r.chunkCount };
+    } catch (e) {
+      return { ok: false as const, srcPath, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  return { ok: true as const, results };
+});
 
 // ─── IPC: command history (SQLite — every prompt submitted to an agent) ──────
 ipcMain.handle('history:add', (_evt, payload: unknown) => {

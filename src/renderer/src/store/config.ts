@@ -39,6 +39,12 @@ export interface CircuitBreakerConfig {
   tokenVelocityPerMin?: number;
 }
 
+/** Enterprise Knowledge Graph config (mirrors src/main/config.ts KnowledgeGraphConfig). */
+export interface KnowledgeGraphConfig {
+  enabled?: boolean;
+  rootPath?: string;
+}
+
 export interface HarnessConfig {
   onboardingComplete: boolean;
   harnessHome: string | null;
@@ -66,6 +72,8 @@ export interface HarnessConfig {
   agentTokenCaps?: Record<string, number>;
   maxTurns?: number;
   circuitBreaker?: CircuitBreakerConfig;
+  /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
+  knowledgeGraph?: KnowledgeGraphConfig;
 }
 
 /** The Sonnet model with the 1M-token context window — used for Michael's prep

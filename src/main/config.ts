@@ -92,6 +92,18 @@ export interface CircuitBreakerConfig {
   tokenVelocityPerMin?: number;
 }
 
+/** Enterprise Knowledge Graph (multimodal context store + agent access tool).
+ *  The user ingests their own documents/images/PDFs; agents query them on demand
+ *  via the `kg` CLI. Opt-in like the heartbeat/Slack features — `enabled` gates
+ *  everything (no env injected, no prompt line, no store touched when off). See
+ *  docs/design/knowledge-graph.md. */
+export interface KnowledgeGraphConfig {
+  /** Master switch. Default false = zero behaviour change (the feature is dark). */
+  enabled?: boolean;
+  /** Override the store location. Unset = <userData>/knowledge. */
+  rootPath?: string;
+}
+
 export interface HarnessConfig {
   /** Has the user completed the first-run onboarding? */
   onboardingComplete: boolean;
@@ -136,6 +148,8 @@ export interface HarnessConfig {
   maxTurns?: number;
   /** Circuit-breaker thresholds (Lane A #6.6b). Unset = conservative defaults. */
   circuitBreaker?: CircuitBreakerConfig;
+  /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
+  knowledgeGraph?: KnowledgeGraphConfig;
   /** Fire native desktop notifications on agent lifecycle events (idle finish / waiting for input). */
   notifications?: boolean;
   /** Terminal theme — mirrored into each agent's per-session Claude settings
@@ -205,7 +219,9 @@ const DEFAULTS: HarnessConfig = {
   reflectByteTriggerPct: 50,
   reflectSectionTrigger: 50,
   reflectRecentKeep: 12,
-  reflectMinBytes: 16_384
+  reflectMinBytes: 16_384,
+  // Enterprise Knowledge Graph — opt-in; dark until the user enables it.
+  knowledgeGraph: { enabled: false }
 };
 
 function configPath(): string {
