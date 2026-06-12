@@ -269,6 +269,34 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
     } catch { /* host may not be sized yet */ }
   }, [fontSize, ptyId]);
 
+  // Drag-and-drop a file (image, etc.) onto the terminal → inject its absolute
+  // path into the pty, exactly like a native terminal's drag-drop. Claude Code
+  // detects an image path in the prompt and attaches it. Without this, Electron
+  // would treat the drop as navigation and load the file:// URL over the app.
+  const onDragOver = (e: React.DragEvent) => {
+    // Must preventDefault on dragover too — otherwise `drop` never fires and the
+    // window navigates to the dropped file. Only claim it when files are present
+    // so text/selection drags fall through to xterm's own handling.
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+  const onDrop = (e: React.DragEvent) => {
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length === 0) return; // not a file drop — let xterm handle it
+    e.preventDefault();
+    const paths = files
+      .map((f) => window.cth.getFilePath(f))
+      .filter(Boolean)
+      // Backslash-escape whitespace/quotes so each path lands as a single token,
+      // matching what a real terminal emits on drag-drop.
+      .map((p) => p.replace(/(["'\\ \t])/g, '\\$1'));
+    if (paths.length === 0) return;
+    // Trailing space separates consecutive drops and lets the user keep typing.
+    void window.cth.writePty(ptyId, paths.join(' ') + ' ');
+  };
+
   const zoom = (delta: number) =>
     setFontSize((s) => Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, s + delta)));
   const resetZoom = () => setFontSize(DEFAULT_FONT_SIZE);
@@ -360,7 +388,7 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
           )}
         </div>
       </div>
-      <div ref={hostRef} style={{
+      <div ref={hostRef} onDragOver={onDragOver} onDrop={onDrop} style={{
         flex: 1, minHeight: 0,
         padding: embedded ? '0 8px 8px' : 0
       }} />
