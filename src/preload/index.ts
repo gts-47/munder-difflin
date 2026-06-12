@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { AgentProvider } from '../shared/agentProvider';
 
 // Injected at build time from package.json (see electron.vite.config.ts).
@@ -316,6 +316,13 @@ const api = {
     ipcRenderer.invoke('pty:spawn', opts),
   writePty: (id: string, data: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:write', id, data),
+  /** Resolve the absolute filesystem path of a dropped/selected File. Electron 32
+   *  removed `File.path`; `webUtils.getPathForFile` is the supported replacement
+   *  and must run in the preload (it isn't on `window`). Returns '' if unknown
+   *  (e.g. a synthetic File that never came from disk). */
+  getFilePath: (file: File): string => {
+    try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
+  },
   resizePty: (id: string, cols: number, rows: number): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:resize', id, cols, rows),
   killPty: (id: string): Promise<{ ok: boolean; error?: string }> =>
