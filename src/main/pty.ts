@@ -209,14 +209,28 @@ export class PtyManager {
         } as Record<string, string>
       });
 
-      this.sessions.set(opts.id, { id: opts.id, proc, cwd: opts.cwd, command: resolved, lastOutputAt: Date.now() });
+      // Capture THIS session object so the proc's callbacks can tell whether the
+      // id still belongs to them. A model change / restart does kill()+spawn()
+      // reusing the SAME id: the old process's kill is asynchronous, so its
+      // onData/onExit can fire AFTER the replacement session is already in the
+      // map. Without the identity guard the dying process would (a) spray its
+      // final bytes into the new agent's fresh TUI frame — scattered/overlapping
+      // text — and (b) on exit delete the replacement session and emit a false
+      // `pty:exit`, killing input to the agent that just started.
+      const session: PtySession = { id: opts.id, proc, cwd: opts.cwd, command: resolved, lastOutputAt: Date.now() };
+      this.sessions.set(opts.id, session);
 
       proc.onData((data) => {
-        const s = this.sessions.get(opts.id);
-        if (s) s.lastOutputAt = Date.now();
+        // Drop trailing output from a process whose id was already reclaimed by
+        // a respawn (or killed) — it would corrupt the new session's screen.
+        if (this.sessions.get(opts.id) !== session) return;
+        session.lastOutputAt = Date.now();
         this.safeSend(`pty:data:${opts.id}`, data);
       });
       proc.onExit(({ exitCode, signal }) => {
+        // Stale exit from a process whose id was reclaimed (kill()+respawn) — do
+        // NOT touch the live session or tell the renderer the new pty died.
+        if (this.sessions.get(opts.id) !== session) return;
         this.safeSend(`pty:exit:${opts.id}`, { exitCode, signal });
         this.sessions.delete(opts.id);
         // Natural exit must run the same lifecycle teardown as an explicit kill.

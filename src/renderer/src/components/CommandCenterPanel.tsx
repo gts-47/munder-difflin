@@ -8,7 +8,7 @@ import { MessageQueueComposer } from './MessageQueueComposer';
 import { TasksKanban } from './TasksKanban';
 import { AskMeTab } from './AskMeTab';
 import { SchedulesTab } from './SchedulesTab';
-import { disposeTerminal } from './terminalPool';
+import { acquireTerminal, resetTerminal } from './terminalPool';
 import { Icon } from './Icon';
 import { MemoryGraphPanel } from './MemoryGraphPanel';
 import { useFleetTelemetry } from '@/hooks/useTelemetry';
@@ -229,13 +229,25 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
     if (seed.seq > 0) setDispatchText(seed.text);
   }, [seed.seq, seed.text]);
 
-  const restartWithModel = async (a: Agent, model: string | undefined) => {
+  // Restart an agent's PTY in place. `resume:true` reattaches its prior Claude
+  // conversation (`--resume <sessionId>`, resolved in the main process from the
+  // hive registry by agent id) — this is "Restart & Continue": a clean re-draw
+  // of the TUI in a fresh process WITHOUT losing the thread, which is the escape
+  // hatch for a corrupted/garbled terminal (e.g. xterm reflow after dragging the
+  // window between displays of different sizes). With `resume` unset it's the
+  // old behavior: a model change that starts a fresh session.
+  const restartWithModel = async (a: Agent, model: string | undefined, opts: { resume?: boolean } = {}) => {
     if (!a.ptyId) return;
     setRestarting(a.id);
     try {
       const cfg = await window.cth.getConfig();
       await window.cth.killPty(a.ptyId);
-      disposeTerminal(a.ptyId);
+      // Soft-reset the pooled terminal in place rather than disposing it: the
+      // same ptyId is reused, so its data subscription, opened xterm and keyboard
+      // wiring all survive the restart. (Disposing dropped the live terminal while
+      // the view — keyed on the unchanged ptyId — never re-attached a replacement,
+      // leaving a dead pane that swallowed every keystroke.)
+      resetTerminal(a.ptyId);
       // Respawn on the same CLI this agent already runs on (inferred from its
       // command if not explicitly tagged) so an Antigravity/Codex worker stays
       // on its own binary. tokenizeCommand keeps quoted model labels one arg.
@@ -247,8 +259,20 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
         : a.isAssistant
         ? { id: a.id, name: a.name, cwd: a.cwd, provider, isAssistant: true, role: "Michael's prep assistant" }
         : { id: a.id, name: a.name, cwd: a.cwd, provider, role: a.description };
-      const res = await window.cth.spawnPty({ id: a.ptyId, cwd: a.cwd, command: exe, args, provider, cols: 100, rows: 30, hive });
-      if (res.ok) updateAgent(a.id, { command: command.trim(), provider, model, status: 'idle', action: 'restarting…' });
+      // Spawn the replacement at the terminal's REAL grid, not the fixed 100×30
+      // default. A size mismatch makes the Claude TUI's absolute cursor moves land
+      // in the wrong cells, so the screen renders as scattered/overlapping text.
+      const entry = acquireTerminal(a.ptyId);
+      let cols = 100, rows = 30;
+      try { entry.fit.fit(); cols = entry.term.cols; rows = entry.term.rows; } catch { /* host not sized yet */ }
+      const res = await window.cth.spawnPty({ id: a.ptyId, cwd: a.cwd, command: exe, args, provider, cols, rows, hive, resume: opts.resume });
+      if (res.ok) {
+        // On a pure resume the model is unchanged — don't overwrite it.
+        const patch = opts.resume
+          ? { status: 'idle' as const, action: 'continuing…' }
+          : { command: command.trim(), provider, model, status: 'idle' as const, action: 'restarting…' };
+        updateAgent(a.id, patch);
+      }
     } catch { /* noop */ } finally {
       setRestarting(null);
     }
@@ -479,6 +503,21 @@ function FloorTab({ seed }: { seed: { text: string; seq: number } }) {
                     ? 'model (restarts agent)'
                     : `${inferAgentProvider(a.command, a.provider)} · model (restarts agent)`}
               </span>
+              {/* Restart & Continue — kill + respawn keeping the SAME model and
+                  resuming the prior conversation (--resume). Use this to redraw a
+                  garbled TUI (e.g. after dragging the window across displays)
+                  without losing the thread. */}
+              <span style={{ flex: 1 }} />
+              <PixelButton
+                variant="secondary"
+                size="sm"
+                disabled={restarting === a.id}
+                onClick={() => restartWithModel(a, a.model, { resume: true })}
+              >
+                <span title="Kill and respawn this agent, resuming its current conversation — fixes a corrupted/garbled terminal without losing context">
+                  restart &amp; continue
+                </span>
+              </PixelButton>
             </div> : (
               <div style={{ fontSize: 11, color: 'var(--cth-ink-500)' }}>
                 provider: {inferAgentProvider(a.command, a.provider)}

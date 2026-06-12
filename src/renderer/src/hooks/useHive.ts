@@ -212,6 +212,12 @@ export function useHive(config: HarnessConfig | null): void {
         args,
         cols: 100,
         rows: 30,
+        // Restore Michael's prior conversation across an app restart. His session
+        // id lives in the hive registry (recorded from his hooks), so the main
+        // process attaches `--resume <id>`; a missing transcript falls back to a
+        // fresh session. Without this the most important context on the floor —
+        // the orchestrator's — was lost on every restart.
+        resume: true,
         hive: { id: GOD_ID, name: 'Michael', provider: 'claude', cwd: config.harnessHome!, isGod: true, role: 'orchestrator (god)' }
       });
       if (cancelled) { godSpawning.current = false; return; }
@@ -239,21 +245,25 @@ export function useHive(config: HarnessConfig | null): void {
       useStore.getState().addAgent(god);
       useStore.getState().setGodStatus('ready');
 
-      // Fresh spawn → kick Michael off once his TUI is up. First enable remote
-      // control so the human can approve permission prompts from their phone
-      // (best-effort — a failed/unknown slash command just prints to his terminal
-      // and is harmless), PAUSE so it lands on its own line, then hand him the
-      // orientation prompt. Both go through the per-pty submit chain, so they're
-      // strictly sequential and can't jam together; the boot-grace window keeps
-      // the inbox-wake/drain loops off Michael until he's oriented. Restored
-      // sessions (the live-PTY branch above) skip this.
+      // Kick Michael off once his TUI is up. Always re-enable remote control so
+      // the human can approve permission prompts from their phone (best-effort — a
+      // failed/unknown slash command just prints to his terminal and is harmless).
+      // Then, ONLY on a genuinely fresh spawn, hand him the orientation prompt —
+      // a RESUMED Michael already has his full context and must not be re-oriented
+      // mid-thread (that would reset the floor's situational awareness). Both go
+      // through the per-pty submit chain, so they're strictly sequential and can't
+      // jam together; the boot-grace window keeps the inbox-wake/drain loops off
+      // Michael until he's settled. The live-PTY branch above skips this entirely.
+      const resumedGod = res.resumed === true;
       bootGraceUntil.current[GOD_ID] = Date.now() + BOOT_GRACE_MS;
       timers.push(setTimeout(() => {
         if (cancelled) return;
         // settleMs pauses the chain ~1.5s after /remote-control before the
-        // orientation prompt is submitted next.
+        // orientation prompt (fresh spawns only) is submitted next.
         submitToPty(GOD_PTY, '/remote-control', REMOTE_CONTROL_SETTLE_MS).catch(() => { /* best-effort */ });
-        submitToPty(GOD_PTY, INITIAL_GOD_PROMPT).catch(() => { /* pty may have died */ });
+        if (!resumedGod) {
+          submitToPty(GOD_PTY, INITIAL_GOD_PROMPT).catch(() => { /* pty may have died */ });
+        }
       }, GOD_BOOT_MS));
     }, 1200);
     return () => { cancelled = true; clearTimeout(t); timers.forEach(clearTimeout); };
