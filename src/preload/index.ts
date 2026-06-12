@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron';
 import type { AgentProvider } from '../shared/agentProvider';
 
 // Injected at build time from package.json (see electron.vite.config.ts).
@@ -466,6 +466,18 @@ const api = {
   /** Ingest explicit file paths (e.g. drag-and-drop). */
   kgIngestFiles: (paths: string[], tags?: string[]): Promise<KnowledgeIngestResult> =>
     ipcRenderer.invoke('kg:ingestFiles', { paths, tags }),
+
+  // ─── Composer attachments (images + files, sent to agents by PATH) ─────────
+  /** Open an OS picker for images/files; returns chosen absolute paths + names. */
+  attachFiles: (): Promise<
+    { ok: true; files: { path: string; name: string }[] } | { ok: false; error: string }
+  > => ipcRenderer.invoke('dialog:attachFiles'),
+  /** Resolve a dropped File's absolute path (Electron 32 removed File.path). */
+  pathForFile: (file: File): string => webUtils.getPathForFile(file),
+  /** Write the current clipboard image to a temp PNG and return its path (paste-to-attach). */
+  saveClipboardImage: (): Promise<
+    { ok: true; file: { path: string; name: string } } | { ok: false; error: string }
+  > => ipcRenderer.invoke('clipboard:saveImage'),
 
   // ─── Command history (SQLite — every prompt submitted to an agent) ─────────
   /** Record one submitted prompt. Fire-and-forget from the prompt-detection hook. */

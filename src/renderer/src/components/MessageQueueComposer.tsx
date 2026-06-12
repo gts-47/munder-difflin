@@ -1,10 +1,16 @@
-import { KeyboardEvent, useState } from 'react';
+import { ClipboardEvent, DragEvent, KeyboardEvent, useState } from 'react';
 import { PixelButton } from './PixelButton';
 import { Icon } from './Icon';
 import { useStore, type Agent, type QueuedMessage } from '@/store/store';
 import { freeflowRecorder, useFreeflow } from '@/freeflow/recorder';
 
 const EMPTY_QUEUE: QueuedMessage[] = [];
+
+/** A file/image attached to the draft. Travels to the agent as a PATH it Reads. */
+interface Attachment {
+  path: string;
+  name: string;
+}
 
 // Prepended (only to the enqueued value, never the visible draft) when the
 // god/Michael agent has the "Delegate to agents" toggle ON.
@@ -53,11 +59,78 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
   // Only the god/Michael agent gets the delegation toggle. Default OFF.
   const [delegate, setDelegate] = useState(false);
 
+  // Files/images staged for the next message. Component-local: switching agents
+  // remounts this component, so attachments are cleared on tab switch (drafts
+  // persist in the store, attachments deliberately don't carry over).
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+
+  const addAttachments = (incoming: Attachment[]) =>
+    setAttachments((prev) => {
+      const seen = new Set(prev.map((a) => a.path));
+      const fresh = incoming.filter((a) => a.path && !seen.has(a.path));
+      return fresh.length ? [...prev, ...fresh] : prev;
+    });
+
+  const removeAttachment = (path: string) =>
+    setAttachments((prev) => prev.filter((a) => a.path !== path));
+
+  // '+' button → OS picker (images group + all files).
+  const pickFiles = async () => {
+    const res = await window.cth.attachFiles();
+    if (res.ok) addAttachments(res.files);
+  };
+
+  // Drop files onto the composer → resolve each to its absolute path.
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setDragOver(false);
+    const dropped = Array.from(e.dataTransfer?.files ?? []);
+    if (!dropped.length) return;
+    const atts = dropped
+      .map((f) => ({ path: window.cth.pathForFile(f), name: f.name }))
+      .filter((a) => a.path);
+    if (atts.length) addAttachments(atts);
+  };
+
+  // Paste a screenshot (no path → persist the native clipboard image to a temp
+  // file) or paste files copied from the OS file manager (carry a real path).
+  const onPaste = async (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(e.clipboardData?.items ?? []);
+    const hasImage = items.some((it) => it.kind === 'file' && it.type.startsWith('image/'));
+    if (hasImage) {
+      e.preventDefault();
+      const res = await window.cth.saveClipboardImage();
+      if (res.ok) addAttachments([res.file]);
+      return;
+    }
+    const files = Array.from(e.clipboardData?.files ?? []);
+    if (files.length) {
+      const atts = files
+        .map((f) => ({ path: window.cth.pathForFile(f), name: f.name }))
+        .filter((a) => a.path);
+      if (atts.length) {
+        e.preventDefault();
+        addAttachments(atts);
+      }
+    }
+  };
+
+  const canSend = !!text.trim() || attachments.length > 0;
+
   const queueIt = () => {
-    if (!text.trim()) return;
-    const out = delegate ? DELEGATE_PREFIX + text : text;
+    if (!canSend) return;
+    // Prepend an "Attached files:" block using the same path-based convention as
+    // the Slack inbound path (useHive.ts) so agents Read the files directly.
+    const body = attachments.length
+      ? (text.trim()
+          ? `${text}\n\nAttached files:\n`
+          : 'Attached files:\n') + attachments.map((a) => `- ${a.path} (${a.name})`).join('\n')
+      : text;
+    const out = delegate ? DELEGATE_PREFIX + body : body;
     enqueueMessage(agent.id, out);
     setText('');
+    setAttachments([]);
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -74,15 +147,30 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
     : `${agent.name} is busy — ${queue.length} queued`;
 
   return (
-    <div style={{
-      flexShrink: 0,
-      borderTop: '1px solid var(--cth-ink-700)',
-      background: 'var(--cth-cream-100)',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 6,
-      padding: 8
-    }}>
+    <div
+      onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+      onDragLeave={(e) => {
+        // Only clear when the cursor actually leaves the composer, not on child enter.
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setDragOver(false);
+      }}
+      onDrop={onDrop}
+      style={{
+        flexShrink: 0,
+        borderTop: '1px solid var(--cth-ink-700)',
+        background: 'var(--cth-cream-100)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 6,
+        padding: 8,
+        boxShadow: dragOver ? 'inset 0 0 0 2px var(--cth-lilac)' : undefined
+      }}>
+      {dragOver && (
+        <span style={{
+          fontFamily: 'var(--cth-font-display)', fontSize: 9, lineHeight: '12px',
+          color: 'var(--cth-ink-700)', textAlign: 'center'
+        }}>DROP TO ATTACH</span>
+      )}
       {/* Header: label, count, status, clear-all */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
@@ -123,7 +211,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
       {queue.length > 0 && (
         <div style={{
           display: 'flex', flexDirection: 'column', gap: 4,
-          maxHeight: 132, overflowY: 'auto'
+          maxHeight: 280, overflowY: 'auto'
         }}>
           {queue.map((m, i) => (
             <div key={m.id} style={{
@@ -172,17 +260,56 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
         }}>{ffHint}</span>
       )}
 
+      {/* Attached files/images — chips with a remove 'x', above the textarea. */}
+      {attachments.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+          {attachments.map((a) => (
+            <span
+              key={a.path}
+              title={a.path}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                maxWidth: '100%',
+                padding: '2px 4px 2px 6px',
+                background: 'var(--cth-cream-200)',
+                boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)',
+                fontFamily: 'var(--cth-font-mono)', fontSize: 12, lineHeight: '16px',
+                color: 'var(--cth-ink-900)'
+              }}
+            >
+              <Icon name="folder" />
+              <span style={{
+                overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: 180
+              }}>{a.name}</span>
+              <button
+                onClick={() => removeAttachment(a.path)}
+                title="Remove attachment"
+                style={{
+                  flexShrink: 0, border: 'none', background: 'transparent', cursor: 'pointer',
+                  color: 'var(--cth-ink-500)', padding: 0,
+                  display: 'inline-flex', alignItems: 'center'
+                }}
+              >
+                <Icon name="x" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Composer */}
       <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKey}
-          rows={2}
+          onPaste={onPaste}
+          rows={5}
           placeholder={idle ? `Message ${agent.name}` : `${agent.name} is busy — queue a message`}
           style={{
             flex: 1,
-            resize: 'none',
+            resize: 'vertical',
+            minHeight: 96, maxHeight: 320,
             padding: '6px 8px',
             background: 'var(--cth-paper-100)',
             border: 'none',
@@ -193,13 +320,18 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
             outline: 'none'
           }}
         />
-        {/* Right column: Delegate toggle (god only) + Free Flow mic stacked ABOVE Send. */}
+        {/* Right column: Delegate toggle (god only) + Attach + Free Flow mic ABOVE Send. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
           {agent.isGod && (
             <DelegateSwitch on={delegate} onToggle={() => setDelegate((d) => !d)} />
           )}
+          <PixelButton variant="secondary" size="md" onClick={pickFiles}>
+            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <Icon name="plus" /> files
+            </span>
+          </PixelButton>
           {freeflowEnabled && <FreeFlowButton agentId={agent.id} />}
-          <PixelButton variant="primary" size="md" onClick={queueIt} disabled={!text.trim()}>
+          <PixelButton variant="primary" size="md" onClick={queueIt} disabled={!canSend}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
               send <Icon name="arrow-right" />
             </span>
