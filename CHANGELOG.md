@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.7] — 2026-06-13
+
+A feature release: talk to your agents with your voice, an opt-in enterprise Knowledge
+Graph, multi-window "floors", a richer message composer with file/image attachments, the
+groundwork for TV-show office themes, and a redesigned landing page — plus composer and
+fullscreen polish.
+
+### Added
+- **Free Flow voice dictation → message queue (now on by default).** Hold Option to talk; your speech is transcribed by Groq Whisper (`whisper-large-v3-turbo`) straight into the message composer. Gated on a Groq API key, which is encrypted at rest.
+- **Enterprise Knowledge Graph v1 (now on by default).** A multimodal store of your own documents / policies / business context, with a CLI agents can query for ranked passages and full documents — so company-specific facts come from your data instead of guesses.
+- **Multi-window "floors" (now on by default).** Open isolated office windows, each with its own set of agents and per-PTY routing.
+- **Rich message composer — file & image attachments.** Attach files/images (via a "files" button or paste-to-attach), shown as removable chips above a taller, resizable input; you can send with attachments alone.
+- **TV-show office themes — infrastructure (behind a flag, off by default).** A theme abstraction (`ThemeConfig` + registry/loader), a Settings theme picker with a destructive switch-flow, and the first themed map (Brooklyn-99 precinct). Ships dark via the `tvShowOffices` flag while the remaining maps land.
+- **Live GitHub star count** next to the Star buttons on the landing page.
+
+### Changed
+- **Composer redesign.** A full-width input above a single tidy control bar (Delegate · Attach · voice · Send) — no dead space from a stacked side column.
+- **Landing page redesign.** Bento layout for the #features and #why sections with new SVG illustrations; the #claude section refreshed (v0.2.4 → v0.2.6).
+
+### Fixed
+- **Fullscreen tab bar no longer clipped.** The fullscreen terminal's tab bar is un-clipped.
+- **Slack double-ack (#).** A single Slack message delivered as both `app_mention` and `message.*` is now de-duplicated by `channel:ts`, so it's handled exactly once.
+
 ## [0.2.6] — 2026-06-10
 
 A polish + reliability patch: the agent terminal renders correctly the moment it opens,

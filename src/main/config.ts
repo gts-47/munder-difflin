@@ -231,7 +231,7 @@ const DEFAULTS: HarnessConfig = {
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
   notifications: false,
-  multiWindow: false,
+  multiWindow: true,
   tvShowOffices: false,
   officeTheme: 'office',
   slackEnabled: false,
@@ -239,7 +239,7 @@ const DEFAULTS: HarnessConfig = {
   slackBotToken: undefined,
   slackChannelId: undefined,
   slackPort: undefined,
-  freeflowEnabled: false,
+  freeflowEnabled: true,
   groqApiKey: undefined,
   freeflowModel: 'whisper-large-v3-turbo',
   webhookEnabled: false,
@@ -255,7 +255,7 @@ const DEFAULTS: HarnessConfig = {
   reflectRecentKeep: 12,
   reflectMinBytes: 16_384,
   // Enterprise Knowledge Graph — opt-in; dark until the user enables it.
-  knowledgeGraph: { enabled: false }
+  knowledgeGraph: { enabled: true }
 };
 
 function configPath(): string {
