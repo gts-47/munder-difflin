@@ -73,8 +73,26 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
   const preset = providerPreset(provider);
   const [goal, setGoal] = useState('');
   const [isolate, setIsolate] = useState(false);
+  // #2 — optional Claude session id to continue. When set, the spawn seeds that
+  // session's transcript into the cwd's project dir and launches `--resume`.
+  const [resumeSessionId, setResumeSessionId] = useState('');
+  const resuming = resumeSessionId.trim().length > 0;
+  // Note shown when the folder was auto-filled from the pasted session id.
+  const [folderNote, setFolderNote] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
+
+  // Zero-step resume: when a session id is entered, look up the cwd it originally
+  // ran in (from the transcript) and pre-fill the Folder so the user doesn't have
+  // to find the worktree. They can still override the folder afterwards. Runs on
+  // blur so we don't hit the resolver on every keystroke.
+  const resolveFolderFromSession = async () => {
+    const sid = resumeSessionId.trim();
+    if (!sid) { setFolderNote(undefined); return; }
+    const resolved = await window.cth.resolveSessionCwd(sid);
+    if (resolved) { setCwd(resolved); setFolderNote(`folder set from session: ${resolved}`); }
+    else setFolderNote(undefined);
+  };
 
   const pickFolder = async () => {
     setError(undefined);
@@ -105,7 +123,11 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
       cols: 100,
       rows: 30,
       // When set, the main process spawns this agent in its own git worktree.
-      isolate,
+      // Forced OFF when resuming a session — `--resume` needs the real cwd's
+      // transcript, not a fresh worktree with a different (empty) project dir.
+      isolate: resuming ? false : isolate,
+      // #2 — continue an existing Claude session in this agent's cwd.
+      resumeSessionId: resuming ? resumeSessionId.trim() : undefined,
       // Provision this agent in the hive (memory + mailbox + identity/protocol).
       hive: {
         id,
@@ -120,6 +142,11 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
       setError(spawnRes.error ?? 'spawn failed');
       return;
     }
+    // #2 — the requested resume session id wasn't found anywhere; main fell back
+    // to a fresh session. Don't block the spawn, but make it visible.
+    if (resuming && spawnRes.resumeNotFound) {
+      console.warn(`[add-agent] resume session "${resumeSessionId.trim()}" not found — started a fresh session`);
+    }
 
     const agent: Agent = {
       id,
@@ -132,13 +159,16 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
       cwd,
       goal: goal.trim() || undefined,
       status: 'idle',
-      action: 'starting up',
+      action: resuming && spawnRes.resumeNotFound ? 'session not found — fresh start' : 'starting up',
       progress: 0,
       currentStation: 'desk',
       ptyId,
       command: command.trim(),
       provider,
       model,
+      // Persist the resolved worktree path (set only when isolation provisioned
+      // one) so a restart can re-enter this exact worktree — see restoreTeam.
+      worktreePath: spawnRes.worktreePath,
       recentTextTs: Date.now()
     };
     addAgent(agent);
@@ -309,12 +339,33 @@ export function AddAgentModal({ onClose, config }: AddAgentModalProps) {
               />
             </Row>
 
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: 'pointer' }}>
+            <Row label="Resume session ID (optional)">
+              <input
+                value={resumeSessionId}
+                onChange={(e) => { setResumeSessionId(e.target.value); setFolderNote(undefined); }}
+                onBlur={resolveFolderFromSession}
+                placeholder="paste a Claude session id to continue its conversation"
+                style={{ ...inputStyle, fontFamily: 'var(--cth-font-mono)', fontSize: 14 }}
+              />
+              {folderNote && (
+                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-mint, var(--cth-ink-700))' }}>
+                  {folderNote}
+                </span>
+              )}
+              {resuming && (
+                <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 12, color: 'var(--cth-ink-700)' }}>
+                  Will resume this session in the chosen folder (git isolation disabled).
+                </span>
+              )}
+            </Row>
+
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center', cursor: resuming ? 'not-allowed' : 'pointer', opacity: resuming ? 0.5 : 1 }}>
               <input
                 type="checkbox"
-                checked={isolate}
+                checked={resuming ? false : isolate}
+                disabled={resuming}
                 onChange={(e) => setIsolate(e.target.checked)}
-                style={{ width: 16, height: 16, cursor: 'pointer' }}
+                style={{ width: 16, height: 16, cursor: resuming ? 'not-allowed' : 'pointer' }}
               />
               <span style={{ fontFamily: 'var(--cth-font-ui)', fontSize: 14, color: 'var(--cth-ink-900)' }}>
                 Git isolation (own worktree)

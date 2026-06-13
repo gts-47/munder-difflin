@@ -184,6 +184,29 @@ export function attachTerminal(entry: TerminalEntry, container: HTMLElement): vo
   }
 }
 
+/**
+ * Soft-reset a pooled terminal for an IN-PLACE pty respawn (the same ptyId is
+ * reused — e.g. a model change or agent restart). Clears the screen + scrollback
+ * and re-arms input while keeping the SAME Terminal, its live data subscription
+ * and its DOM attachment, so the mounted view stays visible and typeable across
+ * the restart.
+ *
+ * Why not disposeTerminal here: the view (PtyTerminalView) keys its attach effect
+ * on the ptyId, which doesn't change on a restart — so it never re-attaches a
+ * replacement terminal. Disposing therefore left a dead, detached pane that
+ * swallowed every keystroke. Resetting in place avoids that entirely.
+ */
+export function resetTerminal(ptyId: string): void {
+  const entry = pool.get(ptyId);
+  if (!entry) return;
+  // Re-arm input — a prior exit (or the kill that precedes the respawn) may have
+  // latched `exited`, which otherwise makes onData drop keystrokes silently.
+  entry.exited = false;
+  // Wipe the old frame + the "process exited" line so the restarted TUI paints
+  // onto a clean grid instead of overlapping stale content.
+  try { entry.term.reset(); } catch { /* not yet open */ }
+}
+
 /** Tear down a pty's terminal (call when the agent/pty is gone for good). */
 export function disposeTerminal(ptyId: string): void {
   const entry = pool.get(ptyId);

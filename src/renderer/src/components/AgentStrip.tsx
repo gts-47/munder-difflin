@@ -56,22 +56,44 @@ export function AgentStrip({ config }: AgentStripProps) {
         if (!command || !a.cwd) { useStore.getState().removeRestorableAgent(a.id); continue; }
         const [exe, ...args] = tokenizeCommand(command);
         const ptyId = a.ptyId ?? `pty-${a.id}`;
+        // An isolated agent's worktree SURVIVES an app restart on disk (it's only
+        // torn down on per-tab close / mid-session exit, not on quit). So re-enter
+        // that exact worktree as the cwd rather than re-isolating — `git worktree
+        // add` would conflict with the existing path/branch, and re-isolating would
+        // also lose the worktree's uncommitted work. cwd = the worktree means
+        // resume + seedSessionTranscript land in the CORRECT checkout.
+        // But the user may have manually pruned/deleted the worktree between runs —
+        // gitIsRepo (git rev-parse) returns false for a missing/invalid dir, so
+        // fall back to the base repo cwd rather than spawning into a dead path.
+        let cwd = a.cwd;
+        let worktreeGone = false;
+        if (a.worktreePath) {
+          if (await window.cth.gitIsRepo(a.worktreePath)) {
+            cwd = a.worktreePath;
+          } else {
+            worktreeGone = true;
+            console.warn(`[restore] worktree gone for ${a.id} (${a.worktreePath}); falling back to base repo ${a.cwd}`);
+          }
+        }
         const res = await window.cth.spawnPty({
           id: ptyId,
-          cwd: a.cwd,
+          cwd,
           command: exe,
           provider,
           args,
           cols: 100,
           rows: 30,
+          // Worktree (if any) already exists on disk — cd into it, don't create a
+          // new one (re-isolating would conflict on the existing path/branch and
+          // lose its uncommitted work).
+          isolate: false,
           // Continue the worker's prior CLI session if one was recorded — the
           // main process picks the provider's resume flag (Claude --resume,
-          // agy --conversation). No-op when there's no recorded session id.
+          // agy --conversation) and for Claude reattaches the transcript. The
+          // agent id is preserved across restart, so its registry entry,
+          // memory.md and inbox reattach by id. No-op without a recorded session.
           resume: true,
-          // Re-request isolation if the agent ran in its own worktree before —
-          // the old worktree was torn down on exit, so a fresh one is created.
-          isolate: !!a.worktreePath,
-          hive: { id: a.id, name: a.name, provider, cwd: a.cwd, role: a.description }
+          hive: { id: a.id, name: a.name, provider, cwd, role: a.description }
         });
         if (res.ok) {
           useStore.getState().addAgent({
@@ -80,7 +102,12 @@ export function AgentStrip({ config }: AgentStripProps) {
             ptyId,
             archived: false,
             status: 'idle',
-            action: 'starting up',
+            // Surface the worktree fallback on the floor card; otherwise normal.
+            action: worktreeGone ? 'worktree gone — using base repo' : 'starting up',
+            // The worktree is no longer on disk — drop it so this agent is treated
+            // as a plain base-cwd agent going forward (a future restore won't keep
+            // re-probing a dead path).
+            worktreePath: worktreeGone ? undefined : a.worktreePath,
             carrying: undefined,
             currentStation: 'desk',
             recentTextTs: Date.now()

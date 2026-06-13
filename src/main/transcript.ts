@@ -1,4 +1,4 @@
-import { closeSync, existsSync, fstatSync, openSync, readSync, readdirSync, readFileSync } from 'node:fs';
+import { closeSync, cpSync, existsSync, fstatSync, mkdirSync, openSync, readSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { estimateCostUsd, normalizeModel } from './pricing';
@@ -14,6 +14,80 @@ export function projectDir(cwd: string): string {
     ? cwd.replace(/[^a-zA-Z0-9]/g, '-')
     : cwd.replace(/^\//, '').replaceAll('/', '-');
   return path.join(os.homedir(), '.claude/projects', key);
+}
+
+/** Ensure session `<sessionId>.jsonl` exists in `cwd`'s Claude project dir so a
+ *  `claude --resume <sessionId>` spawn in that cwd can find it. Claude keys
+ *  transcripts by cwd, so a session started elsewhere is invisible until its
+ *  `.jsonl` is seeded across.
+ *
+ *  - Already present in the target project dir → no-op, returns true.
+ *  - Found under a DIFFERENT project dir (resumed from another cwd — the Add
+ *    Agent "resume session" flow, #2) → copied across, returns true.
+ *  - Not found anywhere → returns false, so the caller can fall back to a fresh
+ *    session instead of launching a broken `--resume`.
+ *
+ *  Best-effort: any fs error yields false rather than throwing into the spawn. */
+/** A Claude session id is a UUID. Renderer-supplied ids flow into `path.join`, so
+ *  reject anything outside this charset before using one as a path component (a
+ *  crafted id like `../../x` would otherwise traverse out of the project dirs). */
+const VALID_SESSION_ID = /^[A-Za-z0-9_-]+$/;
+
+export function seedSessionTranscript(cwd: string, sessionId: string): boolean {
+  try {
+    if (!sessionId || !VALID_SESSION_ID.test(sessionId)) return false;
+    const target = path.join(projectDir(cwd), `${sessionId}.jsonl`);
+    if (existsSync(target)) return true;
+    const projectsRoot = path.join(os.homedir(), '.claude/projects');
+    if (!existsSync(projectsRoot)) return false;
+    for (const dir of readdirSync(projectsRoot)) {
+      const candidate = path.join(projectsRoot, dir, `${sessionId}.jsonl`);
+      if (existsSync(candidate)) {
+        mkdirSync(path.dirname(target), { recursive: true });
+        cpSync(candidate, target);
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/** Resolve a session id to the ORIGINAL working directory it ran in, for the Add
+ *  Agent "resume session" auto-fill. The cwd is read from a transcript RECORD
+ *  (every line carries a `cwd` field) — deliberately NOT by un-dashing the
+ *  project-dir name, which is lossy when the path itself contains dashes. Searches
+ *  every `~/.claude/projects/<dir>/<sessionId>.jsonl`; if more than one matches
+ *  (shouldn't — session ids are unique UUIDs) the most-recently-modified wins.
+ *  Returns the cwd string, or null if not found / unreadable / no cwd record. */
+export function resolveSessionCwd(sessionId: string): string | null {
+  try {
+    if (!sessionId || !VALID_SESSION_ID.test(sessionId)) return null;
+    const projectsRoot = path.join(os.homedir(), '.claude/projects');
+    if (!existsSync(projectsRoot)) return null;
+    let best: { file: string; mtime: number } | null = null;
+    for (const dir of readdirSync(projectsRoot)) {
+      const candidate = path.join(projectsRoot, dir, `${sessionId}.jsonl`);
+      try {
+        const st = statSync(candidate);
+        if (!best || st.mtimeMs > best.mtime) best = { file: candidate, mtime: st.mtimeMs };
+      } catch { /* not present in this project dir */ }
+    }
+    if (!best) return null;
+    const text = readFileSync(best.file, 'utf8');
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const rec = JSON.parse(trimmed) as { cwd?: unknown };
+        if (typeof rec.cwd === 'string' && rec.cwd) return rec.cwd;
+      } catch { /* skip a malformed line */ }
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export interface AgentUsage {

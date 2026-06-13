@@ -269,6 +269,52 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
     } catch { /* host may not be sized yet */ }
   }, [fontSize, ptyId]);
 
+  // Drag-and-drop a file (image, etc.) onto the terminal → inject its absolute
+  // path into the pty, exactly like a native terminal's drag-drop. Claude Code
+  // detects an image path in the prompt and attaches it. Without this, Electron
+  // would treat the drop as navigation and load the file:// URL over the app.
+  const onDragOver = (e: React.DragEvent) => {
+    // Must preventDefault on dragover too — otherwise `drop` never fires and the
+    // window navigates to the dropped file. Only claim it when files are present
+    // so text/selection drags fall through to xterm's own handling.
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+  const onDrop = (e: React.DragEvent) => {
+    const files = Array.from(e.dataTransfer?.files ?? []);
+    if (files.length === 0) return; // not a file drop — let xterm handle it
+    e.preventDefault();
+    const paths = files
+      .map((f) => window.cth.pathForFile(f))
+      .filter(Boolean)
+      // SECURITY: a dropped filename is attacker-controllable; inject it as an
+      // INERT single shell token in the NATIVE backslash-escaped style (what macOS
+      // Terminal/iTerm emit on drag-drop, and the format Claude Code recognizes to
+      // attach a dropped file). (1) Strip ALL control chars first - newline/CR
+      // would be delivered as Enter by writePty and AUTO-SUBMIT the line; ESC would
+      // inject raw terminal escape sequences. (2) Backslash-escape the backslash
+      // itself and every shell metacharacter that could act on Enter (space $ ` " '
+      // ; | & < > ( ) { } [ ] * ? ! ~ #) so the path stays one literal token.
+      // (String.fromCharCode keeps backslashes/control chars out of this source.)
+      .map((p) => {
+        const BS = String.fromCharCode(92);
+        const CTRL = new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31) + String.fromCharCode(127) + ']', 'g');
+        // Backslash is FIRST in the set so escaping each ORIGINAL char exactly once
+        // turns a literal backslash into a pair (never forming a new escape).
+        const SPECIAL = new Set(
+          (BS + ' $' + String.fromCharCode(96) + String.fromCharCode(34) + String.fromCharCode(39) + ';|&<>(){}[]*?!~#')
+            .split('').map((c) => c.charCodeAt(0))
+        );
+        return p.replace(CTRL, '').split('')
+          .map((ch) => (SPECIAL.has(ch.charCodeAt(0)) ? BS + ch : ch)).join('');
+      });
+    if (paths.length === 0) return;
+    // Trailing space separates consecutive drops and lets the user keep typing.
+    void window.cth.writePty(ptyId, paths.join(' ') + ' ');
+  };
+
   const zoom = (delta: number) =>
     setFontSize((s) => Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, s + delta)));
   const resetZoom = () => setFontSize(DEFAULT_FONT_SIZE);
@@ -360,7 +406,7 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
           )}
         </div>
       </div>
-      <div ref={hostRef} style={{
+      <div ref={hostRef} onDragOver={onDragOver} onDrop={onDrop} style={{
         flex: 1, minHeight: 0,
         padding: embedded ? '0 8px 8px' : 0
       }} />
