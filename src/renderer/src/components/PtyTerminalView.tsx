@@ -287,11 +287,21 @@ export function PtyTerminalView({ ptyId, onStreamData, onUserPrompt, onToggleFul
     if (files.length === 0) return; // not a file drop — let xterm handle it
     e.preventDefault();
     const paths = files
-      .map((f) => window.cth.getFilePath(f))
+      .map((f) => window.cth.pathForFile(f))
       .filter(Boolean)
-      // Backslash-escape whitespace/quotes so each path lands as a single token,
-      // matching what a real terminal emits on drag-drop.
-      .map((p) => p.replace(/(["'\\ \t])/g, '\\$1'));
+      // SECURITY: a dropped filename is attacker-controllable; inject it as an
+      // INERT single token. (1) Strip ALL control chars - newline/CR would be
+      // delivered as Enter by writePty and AUTO-SUBMIT the line; ESC would inject
+      // raw terminal escape sequences. (2) Wrap the cleaned path in POSIX single
+      // quotes (embedded quote -> close/escape/reopen) so $ ` ; | & space and
+      // every other shell metacharacter is literal and cannot run even on Enter.
+      // (String.fromCharCode keeps backslashes/control chars out of this source.)
+      .map((p) => {
+        const SQ = String.fromCharCode(39);
+        const BS = String.fromCharCode(92);
+        const CTRL = new RegExp('[' + String.fromCharCode(0) + '-' + String.fromCharCode(31) + String.fromCharCode(127) + ']', 'g');
+        return SQ + p.replace(CTRL, '').split(SQ).join(SQ + BS + SQ + SQ) + SQ;
+      });
     if (paths.length === 0) return;
     // Trailing space separates consecutive drops and lets the user keep typing.
     void window.cth.writePty(ptyId, paths.join(' ') + ' ');
