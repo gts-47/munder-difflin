@@ -1727,6 +1727,43 @@ ipcMain.handle('kg:addFiles', async (evt) => {
   return { ok: true as const, results };
 });
 
+// ─── IPC: composer attachments (images + arbitrary files, attached by PATH) ──
+// The message queue pipes raw text into a Claude CLI PTY, so attachments travel
+// as a file PATH the agent reads with its Read tool (same convention as Slack).
+// Picker offers an Images group + All Files.
+ipcMain.handle('dialog:attachFiles', async (evt) => {
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  if (!win) return { ok: false as const, error: 'no window' };
+  const res = await dialog.showOpenDialog(win, {
+    properties: ['openFile', 'multiSelections'],
+    title: 'Attach images or files',
+    filters: [
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'avif'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
+  return { ok: true as const, files: res.filePaths.map((p) => ({ path: p, name: basename(p) })) };
+});
+
+// Persist the current native clipboard image to a temp PNG so a pasted
+// screenshot can be attached by PATH. Returns an error result when the
+// clipboard holds no image (e.g. a normal text paste).
+ipcMain.handle('clipboard:saveImage', async () => {
+  try {
+    const img = clipboard.readImage();
+    if (img.isEmpty()) return { ok: false as const, error: 'no image in clipboard' };
+    const dir = join(app.getPath('temp'), 'cth-pastes');
+    mkdirSync(dir, { recursive: true });
+    const name = `paste-${Date.now()}.png`;
+    const dest = join(dir, name);
+    writeFileSync(dest, img.toPNG());
+    return { ok: true as const, file: { path: dest, name } };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
 // ─── IPC: command history (SQLite — every prompt submitted to an agent) ──────
 ipcMain.handle('history:add', (_evt, payload: unknown) => {
   const p = (payload ?? {}) as { agentId?: unknown; cwd?: unknown; text?: unknown };
