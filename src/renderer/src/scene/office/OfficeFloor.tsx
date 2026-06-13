@@ -159,6 +159,9 @@ export function OfficeFloor() {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<Application | null>(null);
   const mountIdRef = useRef(0);
+  // The active office theme (store mirror of config.officeTheme). Changing it
+  // tears down and rebuilds the whole scene on the new map/cast (see deps below).
+  const officeTheme = useStore((s) => s.officeTheme);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -177,8 +180,8 @@ export function OfficeFloor() {
     const MAX_ENVELOPES = 16;
 
     const init = async () => {
-      // Active office theme (Phase 0 ships the existing office as `theme:'office'`).
-      const theme = await loadTheme('office');
+      // Load the active theme bundle (falls back to 'office' on a bad/absent bundle).
+      const theme = await loadTheme(officeTheme);
       await app.init({
         background: hexNum(theme.palette.background),
         antialias: false,
@@ -1661,7 +1664,7 @@ export function OfficeFloor() {
       appRef.current = null;
       while (host.firstChild) host.removeChild(host.firstChild);
     };
-  }, []);
+  }, [officeTheme]);
 
   return (
     <div
