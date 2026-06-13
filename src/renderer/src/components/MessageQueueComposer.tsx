@@ -297,8 +297,9 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
         </div>
       )}
 
-      {/* Composer */}
-      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+      {/* Composer — full-width input above a single tidy control bar (cc-ui-polish),
+          with file/image attachment chips + paste-to-attach (rich-composer). */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -307,7 +308,7 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
           rows={5}
           placeholder={idle ? `Message ${agent.name}` : `${agent.name} is busy — queue a message`}
           style={{
-            flex: 1,
+            width: '100%',
             resize: 'vertical',
             minHeight: 96, maxHeight: 320,
             padding: '6px 8px',
@@ -315,23 +316,25 @@ export function MessageQueueComposer({ agent }: MessageQueueComposerProps) {
             border: 'none',
             boxShadow: 'inset 0 0 0 1px var(--cth-ink-700)',
             fontFamily: 'var(--cth-font-mono)',
-            fontSize: 14, lineHeight: '18px',
+            fontSize: 13, lineHeight: '18px',
             color: 'var(--cth-ink-900)',
-            outline: 'none'
+            outline: 'none',
+            boxSizing: 'border-box'
           }}
         />
-        {/* Right column: Delegate toggle (god only) + Attach + Free Flow mic ABOVE Send. */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'stretch' }}>
+        {/* Control bar: Delegate (god only) left; Attach + voice + Send aligned right. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {agent.isGod && (
             <DelegateSwitch on={delegate} onToggle={() => setDelegate((d) => !d)} />
           )}
-          <PixelButton variant="secondary" size="md" onClick={pickFiles}>
+          <span style={{ flex: 1 }} />
+          <PixelButton variant="secondary" size="sm" onClick={pickFiles}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
               <Icon name="plus" /> files
             </span>
           </PixelButton>
           {freeflowEnabled && <FreeFlowButton agentId={agent.id} />}
-          <PixelButton variant="primary" size="md" onClick={queueIt} disabled={!canSend}>
+          <PixelButton variant="primary" size="sm" onClick={queueIt} disabled={!canSend}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
               send <Icon name="arrow-right" />
             </span>
@@ -398,7 +401,7 @@ function FreeFlowButton({ agentId }: { agentId: string }) {
   return (
     <PixelButton
       variant={recording ? 'destructive' : 'secondary'}
-      size="md"
+      size="sm"
       onClick={() => freeflowRecorder.toggle(agentId)}
       disabled={transcribing || busyElsewhere}
     >
