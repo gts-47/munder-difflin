@@ -295,9 +295,15 @@ export class HiveManager {
     const cursor = join(dir, 'cursor.json');
     if (!existsSync(cursor)) this.writeJson(cursor, { lastProcessed: null });
 
-    // upsert registry
+    // upsert registry — spread the PRIOR entry first so a respawn preserves
+    // fields the spawn `meta` doesn't carry, above all `sessionId`. Without this,
+    // ensureAgent (which runs before the resume lookup in the pty:spawn handler)
+    // would wipe the recorded session id, so `lastSession()` returns undefined and
+    // `--resume` is never attached — i.e. every restart starts a fresh thread.
     const reg = this.registry();
+    const prev = reg.agents[meta.id];
     reg.agents[meta.id] = {
+      ...prev,
       ...meta,
       capabilities: meta.capabilities ?? [],
       role: meta.role ?? (meta.isGod ? 'orchestrator' : 'agent'),
