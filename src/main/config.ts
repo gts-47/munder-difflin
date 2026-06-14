@@ -94,6 +94,18 @@ export interface CircuitBreakerConfig {
   tokenVelocityPerMin?: number;
 }
 
+/** Enterprise Knowledge Graph (multimodal context store + agent access tool).
+ *  The user ingests their own documents/images/PDFs; agents query them on demand
+ *  via the `kg` CLI. Opt-in like the heartbeat/Slack features — `enabled` gates
+ *  everything (no env injected, no prompt line, no store touched when off). See
+ *  docs/design/knowledge-graph.md. */
+export interface KnowledgeGraphConfig {
+  /** Master switch. Default false = zero behaviour change (the feature is dark). */
+  enabled?: boolean;
+  /** Override the store location. Unset = <userData>/knowledge. */
+  rootPath?: string;
+}
+
 export interface HarnessConfig {
   /** Has the user completed the first-run onboarding? */
   onboardingComplete: boolean;
@@ -138,12 +150,30 @@ export interface HarnessConfig {
   maxTurns?: number;
   /** Circuit-breaker thresholds (Lane A #6.6b). Unset = conservative defaults. */
   circuitBreaker?: CircuitBreakerConfig;
+  /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
+  knowledgeGraph?: KnowledgeGraphConfig;
   /** Fire native desktop notifications on agent lifecycle events (idle finish / waiting for input). */
   notifications?: boolean;
+  /** Multi-window "floors": expose a New Floor action that opens additional
+   *  windows, each an independent office with isolated renderer state (its own
+   *  session partition) and per-window PTY routing. OFF by default (opt-in) —
+   *  the window/PTY-ownership plumbing is always active and single-window-safe,
+   *  but the New Floor entry points (app menu item + IPC) only appear when on.
+   *  The on-disk hive (god orchestration under harnessHome) stays process-global;
+   *  floors share it. */
+  multiWindow?: boolean;
   /** Terminal theme — mirrored into each agent's per-session Claude settings
    *  ("theme" key) at spawn so the TUI's truecolor palette matches. Scoped to
    *  harness agents only; the user's global Claude theme is never touched. */
   terminalTheme?: 'light' | 'dark';
+  /** Master flag for the TV-show office themes feature (Settings theme picker +
+   *  destructive switch flow). Default false = the picker is hidden and the
+   *  office renders as today (zero behavior change). */
+  tvShowOffices?: boolean;
+  /** Which office map/cast theme the pixel office renders. Only honored when
+   *  `tvShowOffices` is on; otherwise the office theme is used. Unbuilt show
+   *  themes fall back to 'office' in the loader. */
+  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
   /** Master toggle for the Slack → Michael's-queue integration. */
   slackEnabled?: boolean;
   /** Slack app signing secret (Basic Information → Signing Secret). Never logged. */
@@ -154,6 +184,18 @@ export interface HarnessConfig {
   slackChannelId?: string;
   /** Local HTTP port the webhook server binds to (default 3847). */
   slackPort?: number;
+
+  // ─── Free Flow (voice dictation → message queue) ───────────────────────────
+  /** Master toggle for Free Flow push-to-talk dictation. Default OFF: with it off
+   *  the composer shows no mic button, no getUserMedia runs, and no Groq call is
+   *  ever made (zero behavior change). */
+  freeflowEnabled?: boolean;
+  /** User-pasted Groq API key (the user supplies their own free key). Used ONLY in
+   *  the main process for the Groq STT call; NEVER logged, and never crosses IPC
+   *  for the request. Treated like `slackBotToken`. */
+  groqApiKey?: string;
+  /** Groq Whisper model id. Default 'whisper-large-v3-turbo' (fast, multilingual). */
+  freeflowModel?: string;
 
   // ─── Generic inbound webhook + status API ──────────────────────────────────
   /** Master toggle for the generic webhook HTTP API (POST → work, GET → status). */
@@ -191,11 +233,17 @@ const DEFAULTS: HarnessConfig = {
   embeddingModel: 'minilm',
   missions: [OPS_STANDUP_MISSION],
   notifications: false,
+  multiWindow: true,
+  tvShowOffices: false,
+  officeTheme: 'office',
   slackEnabled: false,
   slackSigningSecret: undefined,
   slackBotToken: undefined,
   slackChannelId: undefined,
   slackPort: undefined,
+  freeflowEnabled: true,
+  groqApiKey: undefined,
+  freeflowModel: 'whisper-large-v3-turbo',
   webhookEnabled: false,
   webhookSecret: undefined,
   webhookPort: undefined,
@@ -207,7 +255,9 @@ const DEFAULTS: HarnessConfig = {
   reflectByteTriggerPct: 50,
   reflectSectionTrigger: 50,
   reflectRecentKeep: 12,
-  reflectMinBytes: 16_384
+  reflectMinBytes: 16_384,
+  // Enterprise Knowledge Graph — opt-in; dark until the user enables it.
+  knowledgeGraph: { enabled: true }
 };
 
 function configPath(): string {

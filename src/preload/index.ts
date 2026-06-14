@@ -139,6 +139,11 @@ export interface ScheduledMission {
 }
 
 /** Circuit-breaker thresholds (Lane A #6.6b). Mirrors src/main/config.ts. */
+export interface KnowledgeGraphConfig {
+  enabled?: boolean;
+  rootPath?: string;
+}
+
 export interface CircuitBreakerConfig {
   enabled?: boolean;
   hardStop?: boolean;
@@ -168,13 +173,24 @@ export interface HarnessConfig {
   webhookEnabled?: boolean;
   webhookSecret?: string;
   webhookPort?: number;
+  /** Free Flow voice dictation — master flag (default off), user Groq key, model.
+   *  Entry point B (hold-Option-to-talk) is handled in the renderer, no hotkey. */
+  freeflowEnabled?: boolean;
+  groqApiKey?: string;
+  freeflowModel?: string;
   costCapUsd?: number;
   costCapTokens?: number;
   agentTokenCaps?: Record<string, number>;
   maxTurns?: number;
   circuitBreaker?: CircuitBreakerConfig;
+  /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
+  knowledgeGraph?: KnowledgeGraphConfig;
   /** Terminal theme, mirrored into each agent's per-session Claude settings. */
   terminalTheme?: 'light' | 'dark';
+  /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
+  tvShowOffices?: boolean;
+  /** Active office map/cast theme (honored only when tvShowOffices is on). */
+  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
 }
 
 export interface MemoryStatus {
@@ -185,6 +201,44 @@ export interface MemoryStatus {
   palacePath: string | null;
   model: 'minilm' | 'embeddinggemma';
   bin: string | null;
+}
+
+/** Enterprise Knowledge Graph — corpus status, one document, and a search hit. */
+export interface KnowledgeStatus {
+  enabled: boolean;
+  root: string;
+  docCount: number;
+  chunkCount: number;
+  byModality: Record<string, number>;
+}
+export interface KnowledgeDoc {
+  id: string;
+  title: string;
+  source: string;
+  modality: string;
+  mime: string | null;
+  origExt: string;
+  bytes: number;
+  tags: string[];
+  caption: string | null;
+  chunkCount: number;
+  addedAt: string;
+  extractor: string;
+  truncated: boolean;
+}
+export interface KnowledgeHit {
+  docId: string;
+  title: string;
+  source: string;
+  modality: string;
+  chunkIdx: number;
+  score: number;
+  snippet: string;
+}
+export interface KnowledgeIngestResult {
+  ok: boolean;
+  results: Array<{ ok: boolean; srcPath: string; docId?: string; chunkCount?: number; error?: string }>;
+  error?: string;
 }
 
 export interface DirEntry {
@@ -316,13 +370,6 @@ const api = {
     ipcRenderer.invoke('pty:spawn', opts),
   writePty: (id: string, data: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:write', id, data),
-  /** Resolve the absolute filesystem path of a dropped/selected File. Electron 32
-   *  removed `File.path`; `webUtils.getPathForFile` is the supported replacement
-   *  and must run in the preload (it isn't on `window`). Returns '' if unknown
-   *  (e.g. a synthetic File that never came from disk). */
-  getFilePath: (file: File): string => {
-    try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
-  },
   resizePty: (id: string, cols: number, rows: number): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('pty:resize', id, cols, rows),
   killPty: (id: string): Promise<{ ok: boolean; error?: string }> =>
@@ -420,6 +467,32 @@ const api = {
   reflectNow: (id?: string): Promise<Array<{ id: string; condensed: boolean; reason: string; oldBytes?: number; newBytes?: number }>> =>
     ipcRenderer.invoke('memory:reflectNow', id),
 
+  // ─── Enterprise Knowledge Graph (multimodal context for agents) ───────────
+  kgStatus: (): Promise<KnowledgeStatus> => ipcRenderer.invoke('kg:status'),
+  kgList: (): Promise<KnowledgeDoc[]> => ipcRenderer.invoke('kg:list'),
+  kgSearch: (query: string, limit?: number): Promise<KnowledgeHit[]> =>
+    ipcRenderer.invoke('kg:search', query, limit),
+  kgGet: (id: string): Promise<{ meta: KnowledgeDoc; text: string } | null> =>
+    ipcRenderer.invoke('kg:get', id),
+  kgRemove: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('kg:remove', id),
+  /** Open an OS file picker and ingest the chosen artifacts in one round-trip. */
+  kgAddFiles: (): Promise<KnowledgeIngestResult> => ipcRenderer.invoke('kg:addFiles'),
+  /** Ingest explicit file paths (e.g. drag-and-drop). */
+  kgIngestFiles: (paths: string[], tags?: string[]): Promise<KnowledgeIngestResult> =>
+    ipcRenderer.invoke('kg:ingestFiles', { paths, tags }),
+
+  // ─── Composer attachments (images + files, sent to agents by PATH) ─────────
+  /** Open an OS picker for images/files; returns chosen absolute paths + names. */
+  attachFiles: (): Promise<
+    { ok: true; files: { path: string; name: string }[] } | { ok: false; error: string }
+  > => ipcRenderer.invoke('dialog:attachFiles'),
+  /** Resolve a dropped File's absolute path (Electron 32 removed File.path). */
+  pathForFile: (file: File): string => webUtils.getPathForFile(file),
+  /** Write the current clipboard image to a temp PNG and return its path (paste-to-attach). */
+  saveClipboardImage: (): Promise<
+    { ok: true; file: { path: string; name: string } } | { ok: false; error: string }
+  > => ipcRenderer.invoke('clipboard:saveImage'),
+
   // ─── Command history (SQLite — every prompt submitted to an agent) ─────────
   /** Record one submitted prompt. Fire-and-forget from the prompt-detection hook. */
   historyAdd: (entry: { agentId: string; cwd?: string; text: string }): Promise<{ ok: boolean; error?: string }> =>
@@ -479,6 +552,11 @@ const api = {
   },
   confirmClose: (): Promise<void> => ipcRenderer.invoke('app:confirmClose'),
   cancelClose: (): Promise<void> => ipcRenderer.invoke('app:cancelClose'),
+
+  // ─── Multi-window floors ───────────────────────────────────────────────────
+  /** Open a new floor (independent office window). No-op when the multiWindow
+   *  flag is off. Resolves { ok } indicating whether a window opened. */
+  newFloor: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('window:newFloor'),
 
   // ─── Closing time (graceful shutdown via the hive) ─────────────────────────
   /** Start the closing-time protocol: the god broadcasts shutdown, every worker
@@ -669,7 +747,21 @@ const api = {
   webhookSetConfig: (patch: {
     secret?: string; port?: number; enabled?: boolean;
   }): Promise<{ ok: boolean }> =>
-    ipcRenderer.invoke('webhook:setConfig', patch)
+    ipcRenderer.invoke('webhook:setConfig', patch),
+
+  // ─── Free Flow (voice dictation → message queue) ─────────────────────────────
+  /** Persist Free Flow settings (flag / Groq key / model). The Groq key is stored
+   *  in main config; entry point B (hold-Option) is renderer-side, no hotkey here. */
+  freeflowSetConfig: (patch: {
+    enabled?: boolean; apiKey?: string; model?: string;
+  }): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('freeflow:setConfig', patch),
+  /** Transcribe one captured audio clip via Groq (the key stays in main; only the
+   *  audio bytes go in and the transcript comes back). Gated on the flag + a key. */
+  freeflowTranscribe: (arg: {
+    audio: ArrayBuffer | Uint8Array; mimeType?: string; filename?: string; language?: string;
+  }): Promise<{ ok: boolean; text?: string; error?: string }> =>
+    ipcRenderer.invoke('freeflow:transcribe', arg)
 };
 
 contextBridge.exposeInMainWorld('cth', api);

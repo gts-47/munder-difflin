@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, powerSaveBlocker, screen, shell, Notification } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, powerSaveBlocker, screen, shell, Notification } from 'electron';
 import { spawn } from 'node:child_process';
 import { rmSync, existsSync, readFileSync, readdirSync, statSync, cpSync, writeFileSync, unlinkSync, mkdirSync, createWriteStream } from 'node:fs';
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
@@ -19,12 +19,14 @@ import { HookServer } from './hooks';
 import { CircuitBreaker, type BreakerInput } from './breaker';
 import type { UsageProvider } from './usage';
 import { MemoryManager } from './memory';
+import { KnowledgeManager } from './knowledge';
 import { MemoryReflector, type ReflectSettings } from './reflect';
 import { PersistStore } from './db';
 import { readAgentUsage, readContextTokens, seedSessionTranscript, resolveSessionCwd } from './transcript';
 import { listIssues, listCIRuns } from './github';
 import { SlackWebhookServer, SlackReplyServer, postSlackReply, type SlackEventFile } from './slack';
 import { WebhookServer, type WebhookInbound, type WebhookTaskStatus } from './webhook';
+import { transcribeWithGroq, DEFAULT_GROQ_MODEL } from './freeflow';
 import { TelemetryCollector } from './telemetry';
 import { ControlRegistry } from './control';
 import { ClosingTimeController } from './closingTime';
@@ -100,6 +102,8 @@ const memory = new MemoryManager(
   () => readConfig().harnessHome,
   () => { const c = readConfig(); return { enabled: c.semanticMemory !== false, model: c.embeddingModel ?? 'minilm' }; }
 );
+// Enterprise Knowledge Graph — file-backed store + agent CLI (default OFF).
+const knowledge = new KnowledgeManager();
 /** Reads the reflect tunables from config each tick (defaults baked in here so a
  *  pre-existing config.json without the keys still gets sane values). */
 function reflectSettings(): ReflectSettings {
@@ -125,7 +129,18 @@ const reflector = new MemoryReflector(
 // Durable harness state (SQLite, main process). Phase A: window bounds (kv) +
 // net-new command history. Opened in whenReady, closed in the teardown blocks.
 const persist = new PersistStore();
+/** The PRIMARY window — the one running the hive/god orchestration and the sink
+ *  for process-global timer events (missions, breaker, Slack ingestion). It is
+ *  the most-recently-focused live window, so global events follow the user.
+ *  Additional "floor" windows are tracked in `allWindows` below. */
 let mainWindow: BrowserWindow | null = null;
+/** Every open window (primary + floors). A registry, not a single handle, so
+ *  multi-window lifecycle (focus tracking, quit fan-out) is correct. */
+const allWindows = new Set<BrowserWindow>();
+/** Monotonic floor counter → a stable, unique session partition per floor so
+ *  each floor's renderer state (localStorage: agents, queues, selection) is
+ *  isolated from every other window's. */
+let floorSeq = 0;
 
 /** When true, skip the quit interceptor (user already confirmed). */
 let allowQuit = false;
@@ -589,7 +604,13 @@ function armHeartbeat(m: ScheduledMission): void {
  *  throws "Object has been destroyed" (the main-process crash dialog). */
 function liveWebContents(): Electron.WebContents | null {
   const wc = mainWindow?.webContents;
-  return wc && !wc.isDestroyed() ? wc : null;
+  if (wc && !wc.isDestroyed()) return wc;
+  // Primary gone (closed/destroyed): fall back to any other live window so a
+  // global event still reaches a renderer instead of being silently dropped.
+  for (const w of allWindows) {
+    if (!w.isDestroyed() && !w.webContents.isDestroyed()) return w.webContents;
+  }
+  return null;
 }
 
 // ─── Slack webhook server (Slack message → Michael's queue) ──────────────────
@@ -1121,18 +1142,42 @@ function debounce(fn: () => void, ms: number): () => void {
   return () => { if (t) clearTimeout(t); t = setTimeout(() => { t = null; fn(); }, ms); };
 }
 
-function createWindow(): void {
-  // Restore the last window geometry (kv), falling back to the default size.
+/** Cascade a new floor off the focused window so it doesn't stack exactly on
+ *  top, clamped on-screen (clampBounds drops an off-display position). */
+function floorCascade(): WindowBounds | null {
+  const base = (mainWindow && !mainWindow.isDestroyed())
+    ? mainWindow
+    : [...allWindows].find((w) => !w.isDestroyed());
+  if (!base) return null;
+  const b = base.getBounds();
+  const OFFSET = 36;
+  return clampBounds({ x: b.x + OFFSET, y: b.y + OFFSET, width: b.width, height: b.height });
+}
+
+/**
+ * Create a window. The PRIMARY window (no opts) restores saved geometry, uses
+ * the default session, runs the hive, and keeps the existing app-quit warning.
+ * A FLOOR window (`{ floor: true }`) gets its own persistent session partition
+ * — isolating its renderer state (agents/queues/selection) from every other
+ * window — cascades its position, and on close stops only its OWN terminals
+ * while the app keeps running.
+ */
+function createWindow(opts: { floor?: boolean } = {}): BrowserWindow {
+  const isFloor = opts.floor === true;
+
+  // Primary restores saved geometry; floors cascade off the focused window.
   let saved: WindowBounds | null = null;
-  try { saved = clampBounds(persist.getKv('window.bounds')); } catch { saved = null; }
+  if (!isFloor) { try { saved = clampBounds(persist.getKv('window.bounds')); } catch { saved = null; } }
+  const cascade = isFloor ? floorCascade() : null;
+  const geom = cascade ?? saved;
 
   const win = new BrowserWindow({
-    width: saved?.width ?? DEFAULT_WIN.width,
-    height: saved?.height ?? DEFAULT_WIN.height,
-    ...(saved && saved.x !== undefined && saved.y !== undefined ? { x: saved.x, y: saved.y } : {}),
+    width: geom?.width ?? DEFAULT_WIN.width,
+    height: geom?.height ?? DEFAULT_WIN.height,
+    ...(geom && geom.x !== undefined && geom.y !== undefined ? { x: geom.x, y: geom.y } : {}),
     minWidth: MIN_WIN.width,
     minHeight: MIN_WIN.height,
-    title: 'Munder Difflin',
+    title: isFloor ? 'Munder Difflin — Floor' : 'Munder Difflin',
     backgroundColor: '#FFF8E7',
     titleBarStyle: 'hiddenInset',
     show: false,
@@ -1145,24 +1190,60 @@ function createWindow(): void {
       // flush, telemetry polls). Chromium throttles timers in occluded windows
       // — incl. behind the LOCK SCREEN — which silently stalls the hive while
       // the user is away. Don't.
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // Each floor gets its OWN persistent session partition → isolated
+      // localStorage so floors never share or stomp each other's office state.
+      // The primary keeps the DEFAULT session so existing persisted state loads.
+      ...(isFloor ? { partition: `persist:floor-${++floorSeq}` } : {})
     }
   });
 
-  mainWindow = win;
+  // Capture the webContents once: after 'closed' the window is gone, but this
+  // reference stays valid as the per-PTY ownership key.
+  const wc = win.webContents;
 
-  // Persist geometry as the user drags/resizes (debounced) and on close. Skip
-  // while maximized/minimized so a restore doesn't save the fullscreen rect.
-  const saveBounds = debounce(() => {
-    if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
-    try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
-  }, 400);
-  win.on('resized', saveBounds);
-  win.on('moved', saveBounds);
-  win.on('close', () => {
-    if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
-    try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
+  allWindows.add(win);
+  // Global timer events follow the user — the most-recently-focused window is
+  // primary. The primary is also seeded synchronously so boot events route now.
+  win.on('focus', () => { mainWindow = win; });
+  if (!isFloor) mainWindow = win;
+
+  // Permission gate for the renderer (our own trusted, local content). The only
+  // permission we constrain is microphone capture (Free Flow): it's allowed ONLY
+  // while Free Flow is enabled, so a disabled flag means zero mic access even at
+  // the Electron layer. Every other permission keeps the app's prior permissive
+  // behavior (e.g. clipboard for xterm/editor copy must keep working).
+  const ses = win.webContents.session;
+  ses.setPermissionRequestHandler((_wc, permission, callback, details) => {
+    if (permission === 'media') {
+      const mediaTypes = details && 'mediaTypes' in details ? details.mediaTypes : undefined;
+      const wantsAudio = !mediaTypes || mediaTypes.includes('audio');
+      callback(readConfig().freeflowEnabled === true && wantsAudio);
+      return;
+    }
+    callback(true);
   });
+  ses.setPermissionCheckHandler((_wc, permission) => {
+    if (permission === 'media') return readConfig().freeflowEnabled === true;
+    return true;
+  });
+
+  // Only the primary persists geometry (kv `window.bounds`); floors cascade
+  // fresh each launch. Skip while maximized/minimized so a restore doesn't save
+  // the fullscreen rect.
+  if (!isFloor) {
+    const saveBounds = debounce(() => {
+      if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
+      try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
+    }, 400);
+    win.on('resized', saveBounds);
+    win.on('moved', saveBounds);
+    win.on('close', () => {
+      if (win.isDestroyed() || win.isMinimized() || win.isMaximized()) return;
+      try { persist.setKv('window.bounds', win.getBounds()); } catch { /* DB best-effort */ }
+    });
+  }
+
 
   win.once('ready-to-show', () => win.show());
 
@@ -1171,19 +1252,38 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  // On macOS, the red-X "close" event by default destroys the window — and on
-  // a single-window app, that effectively quits. Intercept it the same way we
-  // intercept before-quit so PTY users get the warning.
+  // Close interception when live PTYs exist. The red-X destroys the window;
+  // intercept it the same way before-quit does so PTY users aren't surprised.
   win.on('close', (e) => {
     if (allowQuit) return;
+    if (isFloor) {
+      // A floor's close is NOT an app quit — confirm only its OWN terminals,
+      // via a self-contained native dialog (no renderer modal). Confirming lets
+      // the window close; its PTYs are stopped in the 'closed' handler.
+      const owned = ptyManager.countByOwner(wc);
+      if (owned > 0) {
+        const choice = dialog.showMessageBoxSync(win, {
+          type: 'warning',
+          buttons: ['Close floor', 'Cancel'],
+          defaultId: 1,
+          cancelId: 1,
+          message: `Close this floor? ${owned} running terminal${owned === 1 ? '' : 's'} on it will be stopped.`,
+          detail: 'Other floors keep running.'
+        });
+        if (choice === 1) e.preventDefault();
+      }
+      return;
+    }
+    // Primary window: existing app-wide quit warning (renderer modal).
     const count = ptyManager.list().length;
     if (count === 0) return;
     e.preventDefault();
     win.focus();
-    win.webContents.send('app:closeRequested', { ptyCount: count });
+    wc.send('app:closeRequested', { ptyCount: count });
   });
 
-  ptyManager.attachWebContents(win.webContents);
+  // The primary is the default PTY sink; floors route purely by per-PTY owner.
+  if (!isFloor) ptyManager.attachWebContents(wc);
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -1192,12 +1292,56 @@ function createWindow(): void {
   }
 
   win.on('closed', () => {
-    if (mainWindow === win) mainWindow = null;
+    allWindows.delete(win);
+    // A closed floor must not leave its terminals running headless. (Natural
+    // onExit teardown — archive + worktree cleanup — still runs per PTY.)
+    if (isFloor) { try { ptyManager.killByOwner(wc); } catch { /* best-effort */ } }
+    if (mainWindow === win) {
+      mainWindow = null;
+      for (const w of allWindows) { if (!w.isDestroyed()) { mainWindow = w; break; } }
+    }
+    syncKeepAwake();
   });
+
+  return win;
+}
+
+/** Open a new floor window — gated by the multiWindow flag. Returns the window,
+ *  or null when the feature is off (the entry points are hidden in that case,
+ *  but the IPC stays defensive). */
+function openFloor(): BrowserWindow | null {
+  if (!readConfig().multiWindow) return null;
+  return createWindow({ floor: true });
+}
+
+/** Build + install the application menu. Only called when multiWindow is on, so
+ *  flag-off keeps Electron's default menu (zero behavior change). Uses standard
+ *  role-based items so copy/paste/quit/etc. work per-platform, and adds the
+ *  "New Floor" item (Cmd/Ctrl+Shift+N). */
+function installAppMenu(): void {
+  const isMac = process.platform === 'darwin';
+  const newFloorItem = {
+    label: 'New Floor',
+    accelerator: 'CmdOrCtrl+Shift+N',
+    click: () => { openFloor(); }
+  };
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{ role: 'appMenu' as const }] : []),
+    {
+      label: 'File',
+      submenu: isMac
+        ? [newFloorItem, { type: 'separator' as const }, { role: 'close' as const }]
+        : [newFloorItem, { type: 'separator' as const }, { role: 'quit' as const }]
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
 // ─── IPC: pty lifecycle ─────────────────────────────────────────────────────
-ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; resumeSessionId?: string; provider?: AgentProvider }) => {
+ipcMain.handle('pty:spawn', async (evt, opts: SpawnOptions & { hive?: AgentMeta; isolate?: boolean; resume?: boolean; resumeSessionId?: string; provider?: AgentProvider }) => {
   if (!opts || typeof opts.id !== 'string' || typeof opts.cwd !== 'string' || typeof opts.command !== 'string') {
     return { ok: false, error: 'invalid SpawnOptions' };
   }
@@ -1253,11 +1397,16 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
     try {
       const inj = hive.ensureAgent(
         { ...opts.hive, cwd: opts.cwd, provider },
-        { semanticMemory: memory.active(), theme: readConfig().terminalTheme ?? 'light' }
+        {
+          semanticMemory: memory.active(),
+          knowledgeGraph: knowledge.active(),
+          theme: readConfig().terminalTheme ?? 'light'
+        }
       );
       opts.args = [...(opts.args ?? []), ...inj.args];
-      // Point the agent's mempalace CLI at the shared palace (no-op if inactive).
-      opts.env = { ...(opts.env ?? {}), ...inj.env, ...memory.env() };
+      // Point the agent's mempalace CLI at the shared palace + the `kg` CLI at the
+      // enterprise knowledge store (both no-ops / empty when their flags are off).
+      opts.env = { ...(opts.env ?? {}), ...inj.env, ...memory.env(), ...knowledge.env() };
     } catch (e) {
       // Hive provisioning is best-effort; never block a spawn on it.
       console.error('[hive] ensureAgent failed:', e);
@@ -1281,6 +1430,17 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
     if (!args.includes('--model')) {
       const m = cfg.defaultModel ?? modelForRole(opts.hive);
       if (m) args.push('--model', m);
+    }
+    // Name the Remote Control session after the agent (Michael, Jim, Dev1…) so it
+    // is identifiable in claude.ai / the mobile app. Otherwise Claude defaults the
+    // prefix to the machine hostname (e.g. "vyapaks-macbook-pro-…"), which is
+    // opaque when several agents run at once — especially with remoteControlAtStartup
+    // on, where RC auto-enables for every session. Slugify the friendly name into a
+    // single safe token; Claude still appends its own random suffix for uniqueness.
+    if (!args.includes('--remote-control-session-name-prefix')) {
+      const label = (opts.hive.name || opts.hive.id || '')
+        .trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+      if (label) args.push('--remote-control-session-name-prefix', label);
     }
     // Coarse runaway cap.
     if (typeof cfg.maxTurns === 'number' && cfg.maxTurns > 0 && !args.includes('--max-turns')) {
@@ -1343,7 +1503,10 @@ ipcMain.handle('pty:spawn', async (_evt, opts: SpawnOptions & { hive?: AgentMeta
   if (Object.keys(nonInteractiveEnv).length > 0) {
     opts.env = { ...(opts.env ?? {}), ...nonInteractiveEnv };
   }
-  const res = ptyManager.spawn(opts);
+  // Record the spawning window as the PTY's owner so its output (pty:data/exit)
+  // routes ONLY back to that floor — never leaking into another window's stream.
+  const owner = BrowserWindow.fromWebContents(evt.sender)?.webContents ?? null;
+  const res = ptyManager.spawn(opts, owner);
   syncKeepAwake(); // arm the power-save blocker while ≥1 agent PTY is alive (#18)
   // Hand the resolved worktree path back to the renderer so it can persist it on
   // the agent (only set when isolation actually provisioned a worktree above).
@@ -1575,6 +1738,90 @@ ipcMain.handle('hive:mineNow', () => { memory.mineNow(); return { ok: true }; })
 ipcMain.handle('memory:reflectNow', (_evt, id: unknown) =>
   reflector.reflectNow(typeof id === 'string' && id ? id : undefined));
 
+// ─── IPC: enterprise Knowledge Graph (multimodal context for agents) ─────────
+ipcMain.handle('kg:status', () => knowledge.status());
+ipcMain.handle('kg:list', () => knowledge.list());
+ipcMain.handle('kg:search', (_evt, query: unknown, limit: unknown) => {
+  if (typeof query !== 'string' || !query.trim()) return [];
+  return knowledge.search(query, typeof limit === 'number' ? limit : undefined);
+});
+ipcMain.handle('kg:get', (_evt, id: unknown) =>
+  (typeof id === 'string' && id ? knowledge.get(id) : null));
+ipcMain.handle('kg:remove', (_evt, id: unknown) =>
+  ({ ok: typeof id === 'string' && id ? knowledge.remove(id) : false }));
+// Ingest one or more files from disk. Best-effort per file; returns per-file
+// results so the UI can report partial success.
+ipcMain.handle('kg:ingestFiles', (_evt, payload: unknown) => {
+  const p = (payload ?? {}) as { paths?: unknown; tags?: unknown };
+  const paths = Array.isArray(p.paths) ? p.paths.filter((x): x is string => typeof x === 'string') : [];
+  const tags = Array.isArray(p.tags) ? p.tags.filter((x): x is string => typeof x === 'string') : undefined;
+  const results = paths.map((srcPath) => {
+    try {
+      const r = knowledge.ingestFile(srcPath, { tags });
+      return { ok: true as const, srcPath, docId: r.docId, chunkCount: r.chunkCount };
+    } catch (e) {
+      return { ok: false as const, srcPath, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  return { results };
+});
+// Open a multi-file picker and ingest the chosen artifacts in one round-trip.
+ipcMain.handle('kg:addFiles', async (evt) => {
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  if (!win) return { ok: false as const, error: 'no window' };
+  const res = await dialog.showOpenDialog(win, {
+    properties: ['openFile', 'multiSelections'],
+    title: 'Add documents to the Knowledge Graph'
+  });
+  if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
+  const results = res.filePaths.map((srcPath) => {
+    try {
+      const r = knowledge.ingestFile(srcPath);
+      return { ok: true as const, srcPath, docId: r.docId, chunkCount: r.chunkCount };
+    } catch (e) {
+      return { ok: false as const, srcPath, error: e instanceof Error ? e.message : String(e) };
+    }
+  });
+  return { ok: true as const, results };
+});
+
+// ─── IPC: composer attachments (images + arbitrary files, attached by PATH) ──
+// The message queue pipes raw text into a Claude CLI PTY, so attachments travel
+// as a file PATH the agent reads with its Read tool (same convention as Slack).
+// Picker offers an Images group + All Files.
+ipcMain.handle('dialog:attachFiles', async (evt) => {
+  const win = BrowserWindow.fromWebContents(evt.sender);
+  if (!win) return { ok: false as const, error: 'no window' };
+  const res = await dialog.showOpenDialog(win, {
+    properties: ['openFile', 'multiSelections'],
+    title: 'Attach images or files',
+    filters: [
+      { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'heic', 'tiff', 'avif'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  if (res.canceled || res.filePaths.length === 0) return { ok: false as const, error: 'cancelled' };
+  return { ok: true as const, files: res.filePaths.map((p) => ({ path: p, name: basename(p) })) };
+});
+
+// Persist the current native clipboard image to a temp PNG so a pasted
+// screenshot can be attached by PATH. Returns an error result when the
+// clipboard holds no image (e.g. a normal text paste).
+ipcMain.handle('clipboard:saveImage', async () => {
+  try {
+    const img = clipboard.readImage();
+    if (img.isEmpty()) return { ok: false as const, error: 'no image in clipboard' };
+    const dir = join(app.getPath('temp'), 'cth-pastes');
+    mkdirSync(dir, { recursive: true });
+    const name = `paste-${Date.now()}.png`;
+    const dest = join(dir, name);
+    writeFileSync(dest, img.toPNG());
+    return { ok: true as const, file: { path: dest, name } };
+  } catch (e) {
+    return { ok: false as const, error: e instanceof Error ? e.message : String(e) };
+  }
+});
+
 // ─── IPC: command history (SQLite — every prompt submitted to an agent) ──────
 ipcMain.handle('history:add', (_evt, payload: unknown) => {
   const p = (payload ?? {}) as { agentId?: unknown; cwd?: unknown; text?: unknown };
@@ -1616,6 +1863,14 @@ ipcMain.handle('app:confirmClose', () => {
 });
 ipcMain.handle('app:cancelClose', () => {
   // no-op — modal will close on the renderer side
+});
+
+// Open a new floor (independent office window). Gated by the multiWindow flag
+// inside openFloor(); returns whether a window opened so a renderer button can
+// reflect availability. The app-menu "New Floor" item calls openFloor() directly.
+ipcMain.handle('window:newFloor', () => {
+  const win = openFloor();
+  return { ok: win != null };
 });
 
 // ─── IPC: closing time (graceful, data-loss-free shutdown) ──────────────────
@@ -1867,6 +2122,44 @@ ipcMain.handle('webhook:setConfig', (_evt, patch: unknown) => {
   return { ok: true };
 });
 
+// ─── IPC: Free Flow (voice dictation → message queue) ────────────────────────
+// Entry point B is hold-Option-to-talk, handled entirely in the renderer
+// (capture-phase key listeners) — no globalShortcut here. macOS doesn't deliver
+// the Fn key to Electron (electron#16714) and a faithful native Fn helper
+// (CGEventTap) is deferred; hold-Option is the human-chosen v1 activation.
+
+ipcMain.handle('freeflow:setConfig', (_evt, patch: unknown) => {
+  const p = (patch ?? {}) as { enabled?: unknown; apiKey?: unknown; model?: unknown };
+  const next: Partial<HarnessConfig> = {};
+  if (typeof p.enabled === 'boolean') next.freeflowEnabled = p.enabled;
+  // Trim string fields; an emptied key clears back to undefined.
+  if (typeof p.apiKey === 'string') next.groqApiKey = p.apiKey.trim() || undefined;
+  if (typeof p.model === 'string') next.freeflowModel = p.model.trim() || DEFAULT_GROQ_MODEL;
+  writeConfig(next);
+  return { ok: true };
+});
+
+/** Transcribe one captured audio clip via Groq. Gated on the flag + a key being
+ *  present, so a disabled feature can NEVER reach the network. The Groq key stays
+ *  in main — only the audio bytes cross IPC inbound and the transcript outbound. */
+ipcMain.handle('freeflow:transcribe', async (_evt, arg: unknown) => {
+  const cfg = readConfig();
+  if (!cfg.freeflowEnabled) return { ok: false, error: 'Free Flow is disabled' };
+  if (!cfg.groqApiKey) return { ok: false, error: 'no Groq API key set' };
+  const a = (arg ?? {}) as { audio?: unknown; mimeType?: unknown; filename?: unknown; language?: unknown };
+  if (!(a.audio instanceof ArrayBuffer) && !(a.audio instanceof Uint8Array)) {
+    return { ok: false, error: 'no audio' };
+  }
+  return transcribeWithGroq({
+    apiKey: cfg.groqApiKey,
+    audio: a.audio,
+    mimeType: typeof a.mimeType === 'string' ? a.mimeType : undefined,
+    filename: typeof a.filename === 'string' ? a.filename : undefined,
+    model: cfg.freeflowModel || DEFAULT_GROQ_MODEL,
+    language: typeof a.language === 'string' && a.language ? a.language : undefined
+  });
+});
+
 /** Start every hive-bound background service against the current harnessHome.
  *  Called on boot, and again to recover in place if a folder-change copy fails
  *  (config:changeHome tears these down before copying). No-op without a home. */
@@ -1911,6 +2204,9 @@ app.whenReady().then(() => {
   try { persist.open(); } catch (e) { console.error('[db] open failed:', e); }
   // Bootstrap the hive (if harnessHome is configured) and start the message router.
   bootstrapHiveServices();
+  // Multi-window floors (opt-in): install the menu carrying "New Floor". When
+  // off, the app keeps Electron's default menu — zero behavior change.
+  if (readConfig().multiWindow) installAppMenu();
   createWindow();
   // Auto-start the Slack webhook server when configured. Best-effort: a tunnel
   // failure (offline) is logged, not fatal. The tunnel URL is ephemeral and

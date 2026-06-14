@@ -1,8 +1,10 @@
 import { useState, useEffect, type CSSProperties } from 'react';
 import type { HarnessConfig } from '@/store/config';
+import { useStore } from '@/store/store';
 import { PixelPanel } from './PixelPanel';
 import { PixelButton } from './PixelButton';
 import { Icon } from './Icon';
+import { OfficeThemePicker } from './OfficeThemePicker';
 
 export interface SettingsModalProps {
   config: HarnessConfig;
@@ -193,6 +195,50 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
   const [showWebhookSecret, setShowWebhookSecret] = useState(false);
   const [showWebhookHelp, setShowWebhookHelp] = useState(false);
 
+  // ─── Knowledge Graph (enterprise multimodal context for agents) ───────────
+  const [kgEnabled, setKgEnabled] = useState<boolean>(
+    (config as HarnessConfig & { knowledgeGraph?: { enabled?: boolean } }).knowledgeGraph?.enabled === true
+  );
+  const [kgDocCount, setKgDocCount] = useState(0);
+  const [kgBusy, setKgBusy] = useState(false);
+  const [kgNote, setKgNote] = useState('');
+
+  const refreshKgStatus = async () => {
+    try { const s = await window.cth.kgStatus(); setKgDocCount(s.docCount); }
+    catch { /* status unavailable */ }
+  };
+
+  const toggleKg = async () => {
+    const next = !kgEnabled;
+    setKgEnabled(next);
+    try {
+      await window.cth.updateConfig({ knowledgeGraph: { enabled: next } });
+      if (next) await refreshKgStatus();
+    } catch { setKgEnabled(!next); }
+  };
+
+  const addKgFiles = async () => {
+    setKgBusy(true); setKgNote('');
+    try {
+      const res = await window.cth.kgAddFiles();
+      if (!res.ok) { setKgNote(res.error === 'cancelled' ? '' : (res.error ?? 'failed')); return; }
+      const added = res.results.filter((r) => r.ok).length;
+      const failed = res.results.length - added;
+      setKgNote(`added ${added} document${added === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}`);
+      await refreshKgStatus();
+    } catch (e) { setKgNote(e instanceof Error ? e.message : String(e)); }
+    finally { setKgBusy(false); }
+  };
+
+  // --- Free Flow (voice dictation → message queue) ---
+  const setFreeflowEnabledStore = useStore((s) => s.setFreeflowEnabled);
+  const [freeflowEnabled, setFreeflowEnabled] = useState(slackCfg.freeflowEnabled ?? false);
+  const [groqKey, setGroqKey] = useState(slackCfg.groqApiKey ?? '');
+  const [freeflowModel, setFreeflowModel] = useState(slackCfg.freeflowModel ?? 'whisper-large-v3-turbo');
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [freeflowBusy, setFreeflowBusy] = useState(false);
+  const [freeflowNote, setFreeflowNote] = useState('');
+
   // Re-seed every editable field from the on-disk config when the modal opens.
   // App's `config` prop is loaded once and never refreshed after a save, so
   // without this the saved budget / velocity / slack values show blank on reopen.
@@ -212,7 +258,14 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
       setWebhookEnabled(cc.webhookEnabled ?? false);
       setWebhookSecret(cc.webhookSecret ?? '');
       setWebhookPort(String(cc.webhookPort ?? 3849));
+      const kgOn = (cc as { knowledgeGraph?: { enabled?: boolean } }).knowledgeGraph?.enabled === true;
+      setKgEnabled(kgOn);
+      setFreeflowEnabled(cc.freeflowEnabled ?? false);
+      setGroqKey(cc.groqApiKey ?? '');
+      setFreeflowModel(cc.freeflowModel ?? 'whisper-large-v3-turbo');
     }).catch(() => { /* keep prop-seeded values */ });
+    window.cth.kgStatus().then((s) => { if (alive) setKgDocCount(s.docCount); })
+      .catch(() => { /* status unavailable */ });
     // Hydrate live connection state + the persisted Request URL: the
     // tunnel URL lives in main, so reopening Settings while connected re-shows it.
     window.cth.slackStatus().then((s) => {
@@ -332,6 +385,33 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
   const copyWebhookUrl = () => { void window.cth.copyToClipboard(webhookUrl); };
   const copyWebhookSecret = () => { void window.cth.copyToClipboard(webhookSecret); };
   const copyTunnel = () => { void window.cth.copyToClipboard(tunnelUrl); };
+
+  // --- Free Flow handlers ---
+  /** Persist Free Flow settings; main re-arms the global hotkey. Also mirror the
+   *  flag into the store so the composer mic button appears/disappears live. */
+  const saveFreeflow = async (enabledOverride?: boolean) => {
+    const enabled = enabledOverride ?? freeflowEnabled;
+    setFreeflowBusy(true); setFreeflowNote('');
+    try {
+      await window.cth.freeflowSetConfig({
+        enabled,
+        apiKey: groqKey,
+        model: freeflowModel.trim() || 'whisper-large-v3-turbo'
+      });
+      setFreeflowEnabledStore(enabled);
+      setFreeflowNote('saved');
+    } catch (e) {
+      setFreeflowNote(e instanceof Error ? e.message : String(e));
+    } finally { setFreeflowBusy(false); }
+  };
+
+  /** Toggle on/off and persist immediately so the change takes effect (and the
+   *  global hotkey arms/disarms) without a separate Save click. */
+  const toggleFreeflow = () => {
+    const next = !freeflowEnabled;
+    setFreeflowEnabled(next);
+    void saveFreeflow(next);
+  };
 
   const reset = async () => {
     setBusy(true);
@@ -660,6 +740,49 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                           </div>
                         </div>
                       </div>
+
+                      <div style={{ height: 1, background: 'var(--cth-ink-300)' }} />
+
+                      {/* Knowledge Graph — enterprise multimodal context for agents */}
+                      <div>
+                        <div style={{
+                          fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+                          color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 10
+                        }}>
+                          Knowledge Graph
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                              Enterprise knowledge base
+                            </span>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                              Add your docs, images &amp; PDFs; agents query them on demand via the <code>kg</code> tool.
+                            </span>
+                          </div>
+                          <PixelButton
+                            variant={kgEnabled ? 'primary' : 'secondary'}
+                            size="sm"
+                            onClick={toggleKg}
+                          >
+                            {kgEnabled ? 'on' : 'off'}
+                          </PixelButton>
+                        </div>
+                        {kgEnabled && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+                            <PixelButton variant="secondary" size="sm" onClick={addKgFiles} disabled={kgBusy}>
+                              {kgBusy ? 'adding…' : 'add files…'}
+                            </PixelButton>
+                            <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>
+                              {kgDocCount} document{kgDocCount === 1 ? '' : 's'} indexed
+                            </span>
+                            {kgNote && <span style={{ fontSize: 12, color: 'var(--cth-mint)' }}>{kgNote}</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Office Theme — TV-show office maps (experimental; flag tvShowOffices, default off) */}
+                      <OfficeThemePicker config={config} />
                     </>
                   )}
 
@@ -952,6 +1075,87 @@ export function SettingsModal({ config, onClose }: SettingsModalProps) {
                                 </div>
                               </div>
                             )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ height: 2, background: 'var(--cth-ink-300)' }} />
+
+                      {/* Free Flow (voice dictation) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{
+                          fontFamily: 'var(--cth-font-display)', fontSize: 8, lineHeight: '12px',
+                          color: 'var(--cth-ink-500)', textTransform: 'uppercase', marginBottom: 2
+                        }}>
+                          Free Flow
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <span style={{ fontSize: 14, lineHeight: '20px', color: 'var(--cth-ink-900)' }}>
+                              Free Flow (voice dictation)
+                            </span>
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                              Push-to-talk dictation: speak, and Groq Whisper drops the text into the queue composer.
+                            </span>
+                          </div>
+                          <PixelButton
+                            variant={freeflowEnabled ? 'primary' : 'secondary'}
+                            size="sm"
+                            onClick={toggleFreeflow}
+                            disabled={freeflowBusy}
+                          >
+                            {freeflowEnabled ? 'on' : 'off'}
+                          </PixelButton>
+                        </div>
+
+                        {freeflowEnabled && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {/* Groq API key — stored in main config, used only there. */}
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <span style={slackLabelStyle}>Groq API key</span>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <input
+                                  type={showGroqKey ? 'text' : 'password'}
+                                  value={groqKey}
+                                  onChange={(e) => setGroqKey(e.target.value)}
+                                  placeholder="gsk_... (get a free key at console.groq.com)"
+                                  style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                                />
+                                <PixelButton variant="secondary" size="sm" onClick={() => setShowGroqKey((v) => !v)} disabled={!groqKey}>
+                                  {showGroqKey ? 'hide' : 'show'}
+                                </PixelButton>
+                              </div>
+                            </label>
+
+                            {/* Model picker */}
+                            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 280 }}>
+                              <span style={slackLabelStyle}>Model</span>
+                              <select
+                                value={freeflowModel}
+                                onChange={(e) => setFreeflowModel(e.target.value)}
+                                style={{ ...slackInputStyle, fontFamily: 'var(--cth-font-mono)' }}
+                              >
+                                <option value="whisper-large-v3-turbo">whisper-large-v3-turbo (fast)</option>
+                                <option value="whisper-large-v3">whisper-large-v3 (accurate)</option>
+                              </select>
+                            </label>
+
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <PixelButton variant="ghost" size="sm" onClick={() => saveFreeflow()} disabled={freeflowBusy}>
+                                save
+                              </PixelButton>
+                              {freeflowNote && (
+                                <span style={{ fontSize: 12, color: 'var(--cth-ink-500)' }}>{freeflowNote}</span>
+                              )}
+                            </div>
+
+                            <span style={{ fontSize: 12, lineHeight: '16px', color: 'var(--cth-ink-500)' }}>
+                              Two ways to dictate: click the mic button above Send in the queue composer (click to record,
+                              click again to transcribe), or — while viewing any agent's terminal — <strong>hold Option
+                              (⌥)</strong> to talk and release to transcribe. Either way the text lands in the composer
+                              draft for you to review before sending. macOS will ask for microphone permission the first
+                              time you record.
+                            </span>
                           </div>
                         )}
                       </div>

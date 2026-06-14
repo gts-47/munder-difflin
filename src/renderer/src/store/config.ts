@@ -39,6 +39,12 @@ export interface CircuitBreakerConfig {
   tokenVelocityPerMin?: number;
 }
 
+/** Enterprise Knowledge Graph config (mirrors src/main/config.ts KnowledgeGraphConfig). */
+export interface KnowledgeGraphConfig {
+  enabled?: boolean;
+  rootPath?: string;
+}
+
 export interface HarnessConfig {
   onboardingComplete: boolean;
   harnessHome: string | null;
@@ -58,6 +64,10 @@ export interface HarnessConfig {
   slackBotToken?: string;
   slackChannelId?: string;
   slackPort?: number;
+  /** Free Flow voice dictation (mirrors src/main/config.ts). */
+  freeflowEnabled?: boolean;
+  groqApiKey?: string;
+  freeflowModel?: string;
   costCapUsd?: number;
   /** Hard total-token ceiling across active agents (the user-facing budget). */
   costCapTokens?: number;
@@ -66,6 +76,12 @@ export interface HarnessConfig {
   agentTokenCaps?: Record<string, number>;
   maxTurns?: number;
   circuitBreaker?: CircuitBreakerConfig;
+  /** Enterprise Knowledge Graph (multimodal context for agents). Default OFF. */
+  knowledgeGraph?: KnowledgeGraphConfig;
+  /** TV-show office themes feature flag (Settings picker + switch flow). Default OFF. */
+  tvShowOffices?: boolean;
+  /** Active office map/cast theme (honored only when tvShowOffices is on). */
+  officeTheme?: 'office' | 'friends' | 'brooklyn99' | 'siliconvalley' | 'got' | 'hogwarts';
 }
 
 /** The Sonnet model with the 1M-token context window — used for Michael's prep

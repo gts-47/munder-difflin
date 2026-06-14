@@ -8,6 +8,12 @@ interface PtySession {
   proc: pty.IPty;
   cwd: string;
   command: string;
+  /** The window (webContents) that spawned this PTY and should receive its
+   *  output. Multi-window: each floor owns its own terminals, so `pty:data:<id>`
+   *  / `pty:exit:<id>` route ONLY here — never broadcast — so one floor's stream
+   *  never leaks into another. Null falls back to the default attached sink
+   *  (the primary window), preserving single-window behavior. */
+  owner: WebContents | null;
   /** Epoch ms of the most recent byte this PTY emitted (bumped in onData). The
    *  heartbeat (Lane A #1) reads this for two things: floor-quiet detection (an
    *  agent printing/thinking counts as activity even before it writes a hive
@@ -63,8 +69,27 @@ export class PtyManager {
    *  runs. Best-effort — set once by the main process. */
   private exitHandler: ((id: string) => void) | null = null;
 
+  /** The default/fallback output sink — set to the PRIMARY window. Used only for
+   *  sessions with no recorded owner; owned sessions route to their owner. */
   attachWebContents(wc: WebContents) {
     this.webContents = wc;
+  }
+
+  /** Count live PTYs owned by a given window — used to scope a floor's
+   *  close-confirmation to its OWN terminals, not the whole app's. */
+  countByOwner(wc: WebContents): number {
+    let n = 0;
+    for (const s of this.sessions.values()) if (s.owner === wc) n++;
+    return n;
+  }
+
+  /** Kill every PTY owned by a window (its onExit runs the normal teardown:
+   *  archive + worktree cleanup). Called when a floor window closes so its
+   *  terminals don't linger as orphaned processes writing to a dead webContents. */
+  killByOwner(wc: WebContents): void {
+    for (const [id, s] of [...this.sessions.entries()]) {
+      if (s.owner === wc) { try { s.proc.kill(); } catch { /* already gone */ } void id; }
+    }
   }
 
   /** Register the natural-exit teardown callback. Invoked from inside node-pty's
@@ -77,8 +102,10 @@ export class PtyManager {
    *  PTY fires onExit asynchronously — by then app.quit() may have destroyed the
    *  window, and `.send()` on a destroyed webContents throws "Object has been
    *  destroyed", which surfaces as the main-process crash dialog. Guard it. */
-  private safeSend(channel: string, payload: unknown): void {
-    const wc = this.webContents;
+  private safeSend(channel: string, payload: unknown, target?: WebContents | null): void {
+    // Route to the session's owner window when known (multi-window: keeps each
+    // floor's stream private); fall back to the default attached sink otherwise.
+    const wc = target ?? this.webContents;
     if (!wc || wc.isDestroyed()) return;
     try { wc.send(channel, payload); } catch { /* window tore down mid-send */ }
   }
@@ -147,7 +174,7 @@ export class PtyManager {
     return command;
   }
 
-  spawn(opts: SpawnOptions): { ok: boolean; error?: string } {
+  spawn(opts: SpawnOptions, owner: WebContents | null = null): { ok: boolean; error?: string } {
     if (this.sessions.has(opts.id)) {
       return { ok: false, error: `pty already exists for id ${opts.id}` };
     }
@@ -217,7 +244,7 @@ export class PtyManager {
       // final bytes into the new agent's fresh TUI frame — scattered/overlapping
       // text — and (b) on exit delete the replacement session and emit a false
       // `pty:exit`, killing input to the agent that just started.
-      const session: PtySession = { id: opts.id, proc, cwd: opts.cwd, command: resolved, lastOutputAt: Date.now() };
+      const session: PtySession = { id: opts.id, proc, cwd: opts.cwd, command: resolved, lastOutputAt: Date.now(), owner };
       this.sessions.set(opts.id, session);
 
       proc.onData((data) => {
@@ -225,13 +252,14 @@ export class PtyManager {
         // a respawn (or killed) — it would corrupt the new session's screen.
         if (this.sessions.get(opts.id) !== session) return;
         session.lastOutputAt = Date.now();
-        this.safeSend(`pty:data:${opts.id}`, data);
+        // Route to the session's owner window (multi-window owner routing).
+        this.safeSend(`pty:data:${opts.id}`, data, session.owner);
       });
       proc.onExit(({ exitCode, signal }) => {
         // Stale exit from a process whose id was reclaimed (kill()+respawn) — do
         // NOT touch the live session or tell the renderer the new pty died.
         if (this.sessions.get(opts.id) !== session) return;
-        this.safeSend(`pty:exit:${opts.id}`, { exitCode, signal });
+        this.safeSend(`pty:exit:${opts.id}`, { exitCode, signal }, session.owner);
         this.sessions.delete(opts.id);
         // Natural exit must run the same lifecycle teardown as an explicit kill.
         // Guarded so a teardown error can never crash node-pty's exit callback.
